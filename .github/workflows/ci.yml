@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Format, Lint, Typecheck, Test, Build
+    runs-on: ubuntu-latest
+
+    env:
+      # Placeholder browser-safe values so build/typecheck never need real secrets.
+      VITE_APP_URL: http://localhost:5173
+      VITE_SUPABASE_URL: https://placeholder.supabase.co
+      VITE_SUPABASE_ANON_KEY: placeholder-anon-key
+      VITE_STELLAR_NETWORK: testnet
+      VITE_STELLAR_RPC_URL: https://soroban-testnet.stellar.org
+      VITE_FACTORY_CONTRACT_ID: ''
+      VITE_USDC_CONTRACT_ID: ''
+      VITE_EXPLORER_BASE_URL: https://stellar.expert/explorer/testnet
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Secret scan (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify no server-side credentials were bundled
+        run: |
+          set -euo pipefail
+          if [ ! -d dist ]; then
+            echo "dist/ not found; skipping bundle credential scan"
+            exit 0
+          fi
+          if grep -rIq -E 'service_role|sb_secret_|SUPABASE_SERVICE_ROLE' dist; then
+            echo "::error::Server-side credential markers found in the built bundle."
+            exit 1
+          fi
+          echo "No server-side credential markers found in dist/."

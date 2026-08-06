@@ -1,0 +1,35 @@
+@import 'tailwindcss';
+
+:root {
+  --susu-surface: #ffffff;
+  --susu-foreground: #0b0f14;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --susu-surface: #0b0f14;
+    --susu-foreground: #f6f7f9;
+  }
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--susu-surface);
+  color: var(--susu-foreground);
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
