@@ -6,7 +6,7 @@ function validEnv(overrides: Record<string, unknown> = {}): Record<string, unkno
   return {
     VITE_APP_URL: 'http://localhost:5173',
     VITE_SUPABASE_URL: 'https://example.supabase.co',
-    VITE_SUPABASE_ANON_KEY: 'sb_publishable_test_value',
+    VITE_SUPABASE_ANON_KEY: 'test-publishable-key',
     VITE_STELLAR_NETWORK: 'testnet',
     VITE_STELLAR_RPC_URL: 'https://soroban-testnet.stellar.org',
     VITE_FACTORY_CONTRACT_ID: '',
@@ -59,7 +59,7 @@ describe('parseEnv', () => {
 
   it('refuses a service-role key exposed to the browser', () => {
     expect(() =>
-      parseEnv(validEnv({ VITE_SUPABASE_SERVICE_ROLE_KEY: 'sb_secret_should_not_be_here' })),
+      parseEnv(validEnv({ VITE_SUPABASE_SERVICE_ROLE_KEY: 'not-a-real-credential' })),
     ).toThrow(/must never be exposed to the browser/);
   });
 
