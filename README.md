@@ -1,6 +1,6 @@
 # Susu Protocol — Web Client
 
-[![CI](https://github.com/Susu-Protocol/susu-web/actions/workflows/ci.yml/badge.svg)](https://github.com/Susu-Protocol/susu-web/actions/workflows/ci.yml)
+[![CI](https://github.com/SISU-PROTOCOL/susu-web/actions/workflows/ci.yml/badge.svg)](https://github.com/SISU-PROTOCOL/susu-web/actions/workflows/ci.yml)
 
 The Susu Protocol web client — a non-custodial rotating savings protocol on Stellar.
 
