@@ -4,8 +4,10 @@
 
 The Susu Protocol web client — a non-custodial rotating savings protocol on Stellar.
 
-> **Status: Phase 0 — scaffolding.** Routes are wired and the app builds, but screens are
-> placeholders. Nothing here is audited or production-ready.
+> **Status: Phase 3 — Stellar client and wallet abstraction.** The Soroban RPC client,
+> the chain-result interpretation layer, and the Freighter wallet adapter are implemented
+> and tested. Screens are still placeholders and no wallet-signed transaction is wired to
+> a screen yet. Nothing here is audited or production-ready.
 
 ## What Susu is
 
@@ -21,9 +23,38 @@ authorize a financial action. It builds transactions, simulates them, asks the w
 sign, submits them, and then reports what the chain actually did. A successful wallet
 signature is never treated as success — only chain confirmation is.
 
+## Chain access and wallets
+
+| Module | Responsibility |
+|---|---|
+| `src/lib/stellar/network.ts` | Derives the network, RPC URL and passphrase from validated config. Refuses an RPC endpoint that contradicts the configured network, and refuses mainnet writes. |
+| `src/lib/stellar/client.ts` | Lazily constructed Soroban RPC server and contract handles for the Factory and the USDC SAC. |
+| `src/lib/stellar/result.ts` | Interprets what the chain actually said. Owns the rule that a submission is not a result. |
+| `src/lib/stellar/submit.ts` | The single path a signed transaction takes to the network. |
+| `src/lib/wallet/` | Wallet interface, registry, and the Freighter adapter (MVP). |
+
+### Why the result layer exists
+
+A wallet signature proves only that a user authorized something, and a node accepting a
+transaction proves only that the envelope reached its mempool. Neither means money moved.
+So the app distinguishes four outcomes, and never collapses them:
+
+- `confirmed` — the ledger reports `SUCCESS`. The only success.
+- `failed` — the ledger reports `FAILED`. The transaction was applied and rejected.
+- `unknown` — the network never reported it within the polling budget. Presented as
+  unknown, never as success or failure.
+- `retry` / `rejected` — the node declined to accept it.
+
+`DUPLICATE` on submission is treated the same as `PENDING`, because it usually means an
+earlier attempt is already being applied, not that the request failed.
+
+The Freighter adapter also rejects two responses that would otherwise look like
+signatures: an envelope returned unchanged, and a signature produced by a different
+account than the one requested (which usually means the active account was switched).
+
 ## Stack
 
-React · Vite · TypeScript · Tailwind CSS v4 · Framer Motion · TanStack Query · React Router · Zod
+React · Vite · TypeScript · Tailwind CSS v4 · Framer Motion · TanStack Query · React Router · Zod · Stellar SDK · Freighter
 
 ## Routes
 
