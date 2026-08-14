@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { amountErrorMessage, formatUsdc, parseUsdc, splitPayout } from '@/lib/susu/amounts';
-import { useCreateGroup } from '@/lib/susu/hooks';
+import { useCreateGroup, useFactoryConfig } from '@/lib/susu/hooks';
 import { useStellar } from '@/lib/stellar/hooks';
 import { useWallet } from '@/lib/wallet/context';
 import { OutcomeNotice } from '@/components/OutcomeNotice';
@@ -47,10 +47,19 @@ export function CreateGroup() {
   const canSubmit =
     parsedAmount.ok && capacityValid && status === 'connected' && address !== undefined;
 
+  // The fee is read from the Factory rather than assumed. It is admin-settable,
+  // so a hardcoded 0.50% could quietly become a false statement about what the
+  // contract will charge. A group's fee is fixed at creation, so the Factory's
+  // current value is the right one to preview.
+  const factoryConfig = useFactoryConfig();
+  const feeBps = factoryConfig.data?.feeBps;
+
   // Mirrors the contract so the user can see the split before committing to it.
+  // Withheld entirely until the real fee is known, rather than defaulting to a
+  // number that might be wrong.
   const preview =
-    parsedAmount.ok && capacityValid
-      ? splitPayout(parsedAmount.stroops * BigInt(capacityNumber), 50)
+    parsedAmount.ok && capacityValid && feeBps !== undefined
+      ? splitPayout(parsedAmount.stroops * BigInt(capacityNumber), feeBps)
       : undefined;
 
   const outcome = createGroup.data;
@@ -118,7 +127,10 @@ export function CreateGroup() {
               </div>
               <div className="flex justify-between">
                 <dt className="text-neutral-600 dark:text-neutral-400">
-                  Recipient receives <span className="opacity-70">(0.50% fee)</span>
+                  Recipient receives{' '}
+                  <span className="opacity-70">
+                    ({feeBps === undefined ? 'fee' : `${(feeBps / 100).toFixed(2)}% fee`})
+                  </span>
                 </dt>
                 <dd className="font-mono">{formatUsdc(preview.recipientAmount)} USDC</dd>
               </div>
@@ -133,6 +145,14 @@ export function CreateGroup() {
             </p>
           </Card>
         )}
+
+        {factoryConfig.isError ? (
+          <Notice tone="warning" title="The current fee could not be read">
+            The Factory did not report its fee, so the split cannot be previewed here. The group can
+            still be created, and the contract will apply whatever fee it actually holds. Check the
+            Overview screen before relying on an expected payout.
+          </Notice>
+        ) : null}
 
         {status !== 'connected' ? (
           <Notice tone="neutral" title="Connect a wallet to create a group">

@@ -148,12 +148,28 @@ async function invokeGroupMethod<T>(
     };
   }
 
-  return {
-    status: 'confirmed',
-    value: decodeReturn(scValToNative(outcome.returnValue)),
-    hash: outcome.hash,
-    ledger: outcome.ledger,
-  };
+  // Decoding happens after the transaction has already been confirmed, so a
+  // failure here must not be thrown. Throwing would surface as a failed mutation
+  // and tell the user their action did not happen when the chain has already
+  // recorded that it did. Report it as an unreadable result instead, the same way
+  // `createGroup` does, and keep the "confirmed but unknown" distinction visible.
+  try {
+    return {
+      status: 'confirmed',
+      value: decodeReturn(scValToNative(outcome.returnValue)),
+      hash: outcome.hash,
+      ledger: outcome.ledger,
+    };
+  } catch (cause) {
+    return {
+      status: 'invalid',
+      failure: {
+        kind: 'opaque',
+        message: `${method} succeeded on-chain, but its result could not be read. Re-read the group before acting again.`,
+        raw: cause instanceof Error ? cause.message : String(cause),
+      },
+    };
+  }
 }
 
 /**
@@ -171,9 +187,20 @@ export function joinGroup(
     context,
     groupAddress,
     'join',
-    [toAddress(context.sourceAddress)],
+    joinArgs(context.sourceAddress),
     (native) => decodeCount(native, 'position'),
   );
+}
+
+/**
+ * Encodes `join(member)` arguments.
+ *
+ * Exported so tests can assert the encoding without a network, mirroring
+ * `createGroupArgs`, since an encoding mistake here would only be discovered by
+ * a rejected transaction.
+ */
+export function joinArgs(member: string): xdr.ScVal[] {
+  return [toAddress(member)];
 }
 
 /** Starts a full group, moving it from Open to Active. */
@@ -193,6 +220,21 @@ export function startGroup(
  * round that advanced in the meantime is rejected by the contract rather than
  * silently contributing to the wrong round.
  */
+/**
+ * Encodes `contribute(member, amount, round)` arguments.
+ *
+ * Exported for the same reason as `createGroupArgs`: the amount must be an `i128`
+ * and the round a `u32`, and a mismatch would be caught by the contract only
+ * after the user had been asked to sign.
+ */
+export function contributeArgs(member: string, amount: bigint, round: number): xdr.ScVal[] {
+  return [
+    toAddress(member),
+    nativeToScVal(amount, { type: 'i128' }),
+    nativeToScVal(round, { type: 'u32' }),
+  ];
+}
+
 export function contribute(
   context: InvocationContext,
   groupAddress: string,
@@ -203,11 +245,7 @@ export function contribute(
     context,
     groupAddress,
     'contribute',
-    [
-      toAddress(context.sourceAddress),
-      nativeToScVal(amount, { type: 'i128' }),
-      nativeToScVal(round, { type: 'u32' }),
-    ],
+    contributeArgs(context.sourceAddress, amount, round),
     () => undefined,
   );
 }
