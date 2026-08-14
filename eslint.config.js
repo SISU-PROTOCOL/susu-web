@@ -32,4 +32,14 @@ export default tseslint.config(
       'no-console': ['warn', { allow: ['warn', 'error'] }],
     },
   },
+  {
+    // Build scripts run in Node, not the browser, so they need Node globals
+    // (`process`, `Buffer`, `console`) rather than the browser set above.
+    files: ['scripts/**/*.{js,mjs}'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: globals.node,
+    },
+  },
 );

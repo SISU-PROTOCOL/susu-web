@@ -79,10 +79,4 @@ jobs:
             echo "dist/ not found; skipping bundle credential scan"
             exit 0
           fi
-          # Character classes keep the literal credential prefixes out of this
-          # file, so the secret scan does not flag the scanner itself.
-          if grep -rIq -E 'service_role|sb[_-]secret|SUPABASE_SERVICE_ROLE' dist; then
-            echo "::error::Server-side credential markers found in the built bundle."
-            exit 1
-          fi
-          echo "No server-side credential markers found in dist/."
+          pnpm check:bundle
