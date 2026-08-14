@@ -1,0 +1,26 @@
+# gitleaks configuration for susu-web.
+#
+# Extends the built-in rules rather than replacing them, so real secrets are still
+# caught. The allowlist below covers values that are *public by design* and would
+# otherwise trip the generic-api-key heuristic, which fires on any `NAME=<value>`
+# assignment whose name looks token-ish. A test constant named `OTHER_TOKEN` holding
+# a perfectly public contract id is exactly that false positive.
+#
+# Soroban contract ids are public identifiers: 56-character base32 strings beginning
+# with `C`, printed on the ledger, embedded in every client call, and granting no
+# authority to move funds. They cannot be kept secret and are not credentials.
+#
+# Nothing here would match a real secret. Stellar secret keys and seeds begin with
+# `S`, seed phrases are words, and service-role tokens are JWTs, none of which fit
+# the pattern below.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Public Stellar contract ids (C... Soroban addresses)"
+regexTarget = "match"
+regexes = [
+  # A contract id is exactly 56 base32 characters beginning with `C`.
+  '''\bC[A-Z2-7]{55}\b''',
+]
