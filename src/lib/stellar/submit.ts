@@ -1,4 +1,4 @@
-import type { rpc, Transaction } from '@stellar/stellar-sdk';
+import type { rpc, Transaction, xdr } from '@stellar/stellar-sdk';
 import { assertNetworkAllowsWrites, type StellarNetwork } from './network';
 import {
   decideFromSendResponse,
@@ -34,7 +34,13 @@ export interface TransactionSubmitter {
  * `failed`, and callers must not render it as either.
  */
 export type SubmissionResult =
-  | { readonly status: 'confirmed'; readonly hash: string; readonly ledger: number }
+  | {
+      readonly status: 'confirmed';
+      readonly hash: string;
+      readonly ledger: number;
+      /** The contract's return value, read back from the ledger. */
+      readonly returnValue: xdr.ScVal | undefined;
+    }
   | {
       readonly status: 'failed';
       readonly hash: string;
@@ -55,7 +61,12 @@ export interface SubmitOptions {
 function fromTxOutcome(outcome: TxOutcome): SubmissionResult {
   switch (outcome.status) {
     case 'confirmed':
-      return { status: 'confirmed', hash: outcome.hash, ledger: outcome.ledger };
+      return {
+        status: 'confirmed',
+        hash: outcome.hash,
+        ledger: outcome.ledger,
+        returnValue: outcome.returnValue,
+      };
     case 'failed':
       return {
         status: 'failed',

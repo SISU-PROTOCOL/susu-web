@@ -1,0 +1,134 @@
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  listAvailableWallets,
+  WalletError,
+  type WalletAccount,
+  type WalletAdapter,
+} from '@/lib/wallet';
+import { WalletContext, type WalletContextValue, type WalletStatus } from '@/lib/wallet/context';
+
+/**
+ * Provides the wallet session.
+ *
+ * This component only decides *what the session is*. The rules about when a
+ * prompt may appear are in `@/lib/wallet/context`, and the signing rules are in
+ * the adapters.
+ */
+
+function toWalletError(cause: unknown): WalletError {
+  if (cause instanceof WalletError) return cause;
+  return new WalletError(
+    'malformed-response',
+    cause instanceof Error ? cause.message : 'The wallet could not be reached.',
+    { cause },
+  );
+}
+
+export function WalletProvider({ children }: { children: ReactNode }) {
+  const [status, setStatus] = useState<WalletStatus>('checking');
+  const [account, setAccount] = useState<WalletAccount | undefined>(undefined);
+  const [wallet, setWallet] = useState<WalletAdapter | undefined>(undefined);
+  const [available, setAvailable] = useState<readonly WalletAdapter[]>([]);
+  const [error, setError] = useState<WalletError | undefined>(undefined);
+
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const detect = async (): Promise<void> => {
+      try {
+        const detected = await listAvailableWallets();
+        if (cancelled || !isMounted.current) return;
+
+        setAvailable(detected);
+        const first = detected[0];
+
+        if (first === undefined) {
+          setStatus('unavailable');
+          return;
+        }
+
+        setWallet(first);
+
+        // Never prompts: this reports an existing authorization, or `null`.
+        const existing = await first.getConnectedAccount();
+        if (cancelled || !isMounted.current) return;
+
+        if (existing === null) {
+          setStatus('disconnected');
+          return;
+        }
+
+        setAccount(existing);
+        setStatus('connected');
+      } catch (cause) {
+        if (cancelled || !isMounted.current) return;
+        setError(toWalletError(cause));
+        setStatus('unavailable');
+      }
+    };
+
+    void detect();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const connect = useCallback(async (): Promise<void> => {
+    const target = wallet ?? (await listAvailableWallets())[0];
+
+    if (target === undefined) {
+      setError(new WalletError('unavailable', 'No Stellar wallet was found in this browser.'));
+      setStatus('unavailable');
+      return;
+    }
+
+    setStatus('connecting');
+    setError(undefined);
+
+    try {
+      const connected = await target.connect();
+      if (!isMounted.current) return;
+      setWallet(target);
+      setAccount(connected);
+      setStatus('connected');
+    } catch (cause) {
+      if (!isMounted.current) return;
+      // A declined prompt leaves the session exactly as it was: still
+      // disconnected. It is a decision, not a fault, so it must not be rendered
+      // as a broken state.
+      setError(toWalletError(cause));
+      setStatus('disconnected');
+    }
+  }, [wallet]);
+
+  const disconnect = useCallback((): void => {
+    setAccount(undefined);
+    setError(undefined);
+    setStatus('disconnected');
+  }, []);
+
+  const value = useMemo<WalletContextValue>(
+    () => ({
+      status,
+      address: account?.address,
+      wallet,
+      available,
+      error,
+      connect,
+      disconnect,
+    }),
+    [status, account, wallet, available, error, connect, disconnect],
+  );
+
+  return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;
+}

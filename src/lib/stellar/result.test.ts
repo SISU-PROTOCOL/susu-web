@@ -77,7 +77,35 @@ describe('decideFromSendResponse', () => {
 describe('outcomeFromTransaction', () => {
   it('reports SUCCESS as confirmed, with the ledger it landed in', () => {
     const outcome = outcomeFromTransaction(transactionResponse(Status.SUCCESS, { ledger: 42 }));
-    expect(outcome).toEqual({ status: 'confirmed', hash: 'deadbeef', ledger: 42 });
+    expect(outcome).toEqual({
+      status: 'confirmed',
+      hash: 'deadbeef',
+      ledger: 42,
+      returnValue: undefined,
+    });
+  });
+
+  it('carries the contract return value from the ledger, not from the client', () => {
+    // `create_group` returns the new group's address. The only trustworthy
+    // source for it is the ledger's own record of the transaction, so the
+    // return value is passed through untouched.
+    const returnValue = { switch: () => ({ name: 'scvAddress' }) };
+    const outcome = outcomeFromTransaction(
+      transactionResponse(Status.SUCCESS, { ledger: 42, returnValue }),
+    );
+
+    expect(outcome.status).toBe('confirmed');
+    if (outcome.status === 'confirmed') {
+      expect(outcome.returnValue).toBe(returnValue);
+    }
+  });
+
+  it('does not synthesize a return value when the chain reports none', () => {
+    const outcome = outcomeFromTransaction(transactionResponse(Status.SUCCESS, { ledger: 42 }));
+    expect(outcome.status).toBe('confirmed');
+    if (outcome.status === 'confirmed') {
+      expect(outcome.returnValue).toBeUndefined();
+    }
   });
 
   it('reports FAILED as failed, with the result code when one can be read', () => {
@@ -121,7 +149,12 @@ describe('pollTransactionOutcome', () => {
 
     const outcome = await pollTransactionOutcome(reader, 'deadbeef', { sleep: noSleep });
 
-    expect(outcome).toEqual({ status: 'confirmed', hash: 'deadbeef', ledger: 7 });
+    expect(outcome).toEqual({
+      status: 'confirmed',
+      hash: 'deadbeef',
+      ledger: 7,
+      returnValue: undefined,
+    });
     expect(reader.calls).toBe(2);
   });
 

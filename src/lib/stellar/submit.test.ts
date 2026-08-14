@@ -15,8 +15,9 @@ function sendResponse(status: string): rpc.Api.SendTransactionResponse {
 function txResponse(
   status: rpc.Api.GetTransactionStatus,
   ledger = 50,
+  returnValue?: unknown,
 ): rpc.Api.GetTransactionResponse {
-  return { status, txHash: HASH, ledger } as unknown as rpc.Api.GetTransactionResponse;
+  return { status, txHash: HASH, ledger, returnValue } as unknown as rpc.Api.GetTransactionResponse;
 }
 
 /** A server that sends a scripted status and reports scripted transaction states. */
@@ -65,7 +66,26 @@ describe('submitAndConfirm', () => {
 
     const result = await submitAndConfirm(server, FAKE_TX, options);
 
-    expect(result).toEqual({ status: 'confirmed', hash: HASH, ledger: 77 });
+    expect(result).toEqual({
+      status: 'confirmed',
+      hash: HASH,
+      ledger: 77,
+      returnValue: undefined,
+    });
+  });
+
+  it('passes the chain return value through on confirmation', async () => {
+    const returnValue = { switch: () => ({ name: 'scvAddress' }) };
+    const server = fakeServer(sendResponse('PENDING'), [
+      txResponse(Status.SUCCESS, 78, returnValue),
+    ]);
+
+    const result = await submitAndConfirm(server, FAKE_TX, options);
+
+    expect(result.status).toBe('confirmed');
+    if (result.status === 'confirmed') {
+      expect(result.returnValue).toBe(returnValue);
+    }
   });
 
   it('polls on DUPLICATE rather than failing, since an earlier attempt may be landing', async () => {
@@ -73,7 +93,12 @@ describe('submitAndConfirm', () => {
 
     const result = await submitAndConfirm(server, FAKE_TX, options);
 
-    expect(result).toEqual({ status: 'confirmed', hash: HASH, ledger: 80 });
+    expect(result).toEqual({
+      status: 'confirmed',
+      hash: HASH,
+      ledger: 80,
+      returnValue: undefined,
+    });
   });
 
   it('reports failed, with the ledger, when the transaction is applied and fails', async () => {

@@ -1,4 +1,4 @@
-import { rpc } from '@stellar/stellar-sdk';
+import { rpc, xdr } from '@stellar/stellar-sdk';
 
 /**
  * Interpretation of chain results.
@@ -31,7 +31,18 @@ export type SubmissionDecision =
  * reported as unknown rather than guessed at.
  */
 export type TxOutcome =
-  | { readonly status: 'confirmed'; readonly hash: string; readonly ledger: number }
+  | {
+      readonly status: 'confirmed';
+      readonly hash: string;
+      readonly ledger: number;
+      /**
+       * The contract's return value, taken from the ledger's own copy of the
+       * transaction rather than from anything the client computed. Absent when
+       * the invoked function returns nothing (`create_group` returns the new
+       * group's address; `contribute` returns unit).
+       */
+      readonly returnValue: xdr.ScVal | undefined;
+    }
   | {
       readonly status: 'failed';
       readonly hash: string;
@@ -126,7 +137,12 @@ export function outcomeFromTransaction(response: rpc.Api.GetTransactionResponse)
 
   switch (response.status) {
     case rpc.Api.GetTransactionStatus.SUCCESS:
-      return { status: 'confirmed', hash, ledger: response.ledger };
+      return {
+        status: 'confirmed',
+        hash,
+        ledger: response.ledger,
+        returnValue: response.returnValue,
+      };
     case rpc.Api.GetTransactionStatus.FAILED: {
       const code = resultCodeOf(response.resultXdr);
       return {

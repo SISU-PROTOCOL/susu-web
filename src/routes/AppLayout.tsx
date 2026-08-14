@@ -1,4 +1,5 @@
 import { NavLink, Outlet } from 'react-router';
+import { WalletButton } from '@/components/WalletButton';
 
 const navItems = [
   { to: '/app', label: 'Overview', end: true },
@@ -36,6 +37,9 @@ export function AppLayout() {
               </li>
             ))}
           </ul>
+          <div className="ml-auto">
+            <WalletButton />
+          </div>
         </nav>
       </header>
       <main>

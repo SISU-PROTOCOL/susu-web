@@ -4,10 +4,11 @@
 
 The Susu Protocol web client — a non-custodial rotating savings protocol on Stellar.
 
-> **Status: Phase 3 — Stellar client and wallet abstraction.** The Soroban RPC client,
-> the chain-result interpretation layer, and the Freighter wallet adapter are implemented
-> and tested. Screens are still placeholders and no wallet-signed transaction is wired to
-> a screen yet. Nothing here is audited or production-ready.
+> **Status: Phase 4 — create/join/contribute flows wired to screens.** The Soroban RPC
+> client, the chain-result layer, the Freighter wallet adapter, the typed Factory/Group
+> contract clients, and the create/join/start/contribute/payout screens are implemented
+> and tested. The flow has been exercised against the deployed Testnet contracts. Nothing
+> here is audited or production-ready.
 
 ## What Susu is
 
@@ -31,7 +32,21 @@ signature is never treated as success — only chain confirmation is.
 | `src/lib/stellar/client.ts` | Lazily constructed Soroban RPC server and contract handles for the Factory and the USDC SAC. |
 | `src/lib/stellar/result.ts` | Interprets what the chain actually said. Owns the rule that a submission is not a result. |
 | `src/lib/stellar/submit.ts` | The single path a signed transaction takes to the network. |
+| `src/lib/stellar/contracts/` | Typed Factory and Group clients, plus strict decoders for raw contract output. |
+| `src/lib/stellar/invoke.ts` | The single pipeline every contract call takes: build → simulate → assemble → sign → submit → confirm. A call that fails simulation never reaches the wallet. |
+| `src/lib/susu/` | USDC amounts as exact integer stroops, and the React Query hooks that read and mutate group state. |
 | `src/lib/wallet/` | Wallet interface, registry, and the Freighter adapter (MVP). |
+
+### Why raw contract output is decoded defensively
+
+Contract reads arrive as loosely-typed native values, so every field is validated before it
+reaches the UI. A `#[contracttype]` unit enum, for example, decodes to `["Active"]` — a
+single-element array, not `"Active"`. That shape was confirmed by reading the deployed
+Testnet contract rather than assumed; an earlier decoder that required a bare string passed
+against its own fixtures and failed against every real group.
+
+Amounts are carried as `bigint` stroops end to end and never converted to floating point,
+and the local fee preview reuses the contract's own integer split so the two cannot disagree.
 
 ### Why the result layer exists
 
