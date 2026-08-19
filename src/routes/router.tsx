@@ -1,5 +1,6 @@
 import { createBrowserRouter, RouterProvider } from 'react-router';
 import { AppLayout } from './AppLayout';
+import { RequireAuth } from './RequireAuth';
 import { Landing } from '@/pages/Landing';
 import { Login } from '@/pages/auth/Login';
 import { Signup } from '@/pages/auth/Signup';
@@ -24,7 +25,11 @@ const router = createBrowserRouter([
   { path: '/join/:inviteCode', element: <JoinInvite /> },
   {
     path: '/app',
-    element: <AppLayout />,
+    element: (
+      <RequireAuth>
+        <AppLayout />
+      </RequireAuth>
+    ),
     children: [
       { index: true, element: <Dashboard /> },
       { path: 'groups', element: <Groups /> },
