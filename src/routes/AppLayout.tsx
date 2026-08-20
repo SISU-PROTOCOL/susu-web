@@ -1,5 +1,8 @@
-import { NavLink, Outlet } from 'react-router';
+import { useState } from 'react';
+import { NavLink, Outlet, useNavigate } from 'react-router';
+import { useAuth } from '@/lib/auth/context';
 import { WalletButton } from '@/components/WalletButton';
+import { Button } from '@/components/ui';
 
 const navItems = [
   { to: '/app', label: 'Overview', end: true },
@@ -8,8 +11,29 @@ const navItems = [
   { to: '/app/settings', label: 'Settings', end: false },
 ];
 
-/** Shell for authenticated application routes. */
+/**
+ * Shell for authenticated application routes.
+ *
+ * The account and the wallet are shown as two separate things, because they are
+ * two separate things: signing out ends the session without disconnecting the
+ * wallet, and disconnecting the wallet does not sign the user out. Presenting
+ * them as one control would imply a link that does not exist, and that
+ * impression is exactly what a non-custodial design must not create.
+ */
 export function AppLayout() {
+  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
+  const [pending, setPending] = useState(false);
+
+  async function onSignOut(): Promise<void> {
+    setPending(true);
+    // Never rejects, and clears the local session even if the revocation call
+    // fails, so there is no failure case to handle here.
+    await signOut();
+    setPending(false);
+    void navigate('/', { replace: true });
+  }
+
   return (
     <div className="min-h-screen">
       <header className="border-b border-neutral-200 dark:border-neutral-800">
@@ -37,7 +61,18 @@ export function AppLayout() {
               </li>
             ))}
           </ul>
-          <div className="ml-auto">
+          <div className="ml-auto flex flex-wrap items-center gap-3">
+            {user?.email === undefined ? null : (
+              <span
+                title={user.email}
+                className="max-w-[16ch] truncate text-xs text-neutral-500 sm:max-w-none"
+              >
+                {user.email}
+              </span>
+            )}
+            <Button variant="ghost" onClick={onSignOut} pending={pending}>
+              Sign out
+            </Button>
             <WalletButton />
           </div>
         </nav>
