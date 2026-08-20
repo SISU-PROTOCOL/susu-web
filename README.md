@@ -4,11 +4,13 @@
 
 The Susu Protocol web client — a non-custodial rotating savings protocol on Stellar.
 
-> **Status: Phase 4 — create/join/contribute flows wired to screens.** The Soroban RPC
-> client, the chain-result layer, the Freighter wallet adapter, the typed Factory/Group
-> contract clients, and the create/join/start/contribute/payout screens are implemented
-> and tested. The flow has been exercised against the deployed Testnet contracts. Nothing
-> here is audited or production-ready.
+> **Status: Phase 4 — accounts and sessions.** Supabase Auth, the session provider, the
+> protected application shell and the four authentication screens are implemented and
+> tested. The `profiles` table and its row-level security live in `susu-api`. Earlier
+> phases remain: the Soroban RPC client, the chain-result layer, the Freighter wallet
+> adapter, the typed Factory/Group contract clients, and the
+> create/join/start/contribute/payout screens. The flow has been exercised against the
+> deployed Testnet contracts. Nothing here is audited or production-ready.
 
 ## What Susu is
 
@@ -67,6 +69,65 @@ The Freighter adapter also rejects two responses that would otherwise look like
 signatures: an envelope returned unchanged, and a signature produced by a different
 account than the one requested (which usually means the active account was switched).
 
+## Accounts and sessions
+
+Credentials are handled entirely by Supabase Auth. This app never sees or stores a
+password, and no password is ever written to a table it owns.
+
+| Module | Responsibility |
+|---|---|
+| `src/lib/auth/actions.ts` | Signup, sign-in, sign-out, password reset and confirmation resend. Every one returns a result rather than throwing, so no page can leave a button apparently doing nothing. |
+| `src/lib/auth/errors.ts` | Translates provider failures into codes the UI branches on, and reads the failures the provider reports in the URL rather than in a response. |
+| `src/lib/auth/validation.ts` | Field-level feedback. Not a security control — Supabase's project settings are the authority and re-check every rule. |
+| `src/lib/auth/context.ts`, `src/components/AuthProvider.tsx` | The session, and the observation of it. |
+| `src/routes/RequireAuth.tsx` | Gates `/app/*` behind a session. |
+
+### An account and a wallet are separate
+
+Being signed in never implies being able to move funds. An account can exist with no
+wallet linked, and a wallet can be connected with no account — which is exactly what an
+invite link needs, so the wallet provider is mounted outside the authenticated shell. The
+two controls in the app header are deliberately separate, because signing out does not
+disconnect the wallet and disconnecting the wallet does not sign anyone out.
+
+`RequireAuth` is a routing convenience, not a security boundary. It decides which
+interface to show; everything behind it is already protected by row-level security on the
+database and by the chain.
+
+### Choices worth knowing about
+
+**Failures are shown from a code, not from the provider's text.** Provider prose is
+unstable and can name internal detail, and several distinct causes share similar wording.
+Translating once means the right remedy appears — `email-not-confirmed` offers to resend
+the confirmation instead of repeating the problem.
+
+**Login does not reveal whether an address is registered.** A wrong password and an
+unknown address produce one message between them. "No such user" would turn the login
+form into a way for anyone to test which addresses have accounts, and the addresses here
+belong to people handling money together. Signup is the same: Supabase answers an existing
+address with a success-shaped response, and the screen shows the same confirmation panel
+either way.
+
+**Password reset ends other sessions.** A password is usually reset because the user
+believes someone else has access. Changing it does not by itself remove that access — the
+other party holds a refresh token that stays valid — so every other session is revoked
+once the new password is set.
+
+**Reset links that have expired are recognised as such.** The provider reports that in the
+URL fragment rather than through an API failure, so without `authErrorFromUrl` the page
+would wait forever for a session that is never coming.
+
+### Required Supabase configuration
+
+Both redirect URLs must be listed in the project's redirect allowlist
+(Authentication → URL Configuration → Redirect URLs), or Supabase silently substitutes the
+Site URL and the emailed links land somewhere unexpected:
+
+- `{VITE_APP_URL}/app` — where a confirmed signup lands
+- `{VITE_APP_URL}/reset-password` — where a recovery link lands
+
+Email confirmation must also be enabled for the signup flow to ask for confirmation.
+
 ## Stack
 
 React · Vite · TypeScript · Tailwind CSS v4 · Framer Motion · TanStack Query · React Router · Zod · Stellar SDK · Freighter
@@ -86,6 +147,10 @@ React · Vite · TypeScript · Tailwind CSS v4 · Framer Motion · TanStack Quer
 | `/app/activity` | Activity |
 | `/app/settings` | Settings |
 | `/app/transactions/:hash` | Transaction detail |
+
+Everything under `/app` requires a session and redirects to `/login` without one. The
+attempted destination is preserved, so signing in returns the user to where they were
+going rather than to the overview.
 
 ## Development
 
