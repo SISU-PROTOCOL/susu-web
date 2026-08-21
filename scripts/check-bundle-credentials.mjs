@@ -27,11 +27,44 @@ import { readdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
 /**
- * Supabase secret keys and personal access tokens are values, not identifiers,
- * and are detected by prefix. Built from parts so that this file does not itself
- * contain a credential-shaped literal for a secret scanner to flag.
+ * Supabase secret keys and personal access tokens are values, not identifiers.
+ *
+ * Detected by prefix *and* a key-length body, never by the prefix alone. The
+ * prefix on its own is not credential material: `@supabase/supabase-js` ships a
+ * `startsWith('sb_secret_')` check of its own, so the moment the client is
+ * reachable from the entry point the bare prefix is in the bundle and a
+ * prefix-only test fails on library code rather than on a leak. The previous,
+ * name-based version of this check hit exactly the same class of false positive,
+ * for the same reason: the code that refuses a credential has to mention it.
+ *
+ * A real key is the prefix followed by a long random body, which is what is
+ * matched here. Built from parts so this file does not itself contain a
+ * credential-shaped literal for a secret scanner to flag.
  */
-const SECRET_VALUE_PREFIXES = ['sb' + '_' + 'secret' + '_', 'sbp' + '_'];
+const SECRET_KEY_PREFIX = 'sb' + '_' + 'secret' + '_';
+const ACCESS_TOKEN_PREFIX = 'sbp' + '_';
+
+/**
+ * The shortest body worth treating as a key.
+ *
+ * Real values are far longer -- a secret key is around 40 characters and a
+ * personal access token 40 hex -- so this floor sits well below them and exists
+ * only to separate a key from a constant. It is low deliberately: a short body
+ * that is still clearly a key should be caught, and the cost of a floor set too
+ * high is a leak that passes.
+ */
+const MIN_KEY_BODY = 16;
+
+const SECRET_VALUE_PATTERNS = [
+  {
+    description: 'a Supabase secret key',
+    pattern: new RegExp(`${SECRET_KEY_PREFIX}[A-Za-z0-9_-]{${MIN_KEY_BODY},}`),
+  },
+  {
+    description: 'a Supabase access token',
+    pattern: new RegExp(`${ACCESS_TOKEN_PREFIX}[A-Za-z0-9]{${MIN_KEY_BODY},}`),
+  },
+];
 
 /** A `postgres://user:password@host` URL carries a password in the bundle. */
 const CREDENTIALED_DATABASE_URL = /postgres(?:ql)?:\/\/[^\s"'`<>/]{1,64}:[^\s"'`<>@]{1,256}@/;
@@ -69,9 +102,12 @@ function decodeSegment(segment) {
 export function findCredentialMaterial(text) {
   const findings = [];
 
-  for (const prefix of SECRET_VALUE_PREFIXES) {
-    if (text.includes(prefix)) {
-      findings.push(`a value with the secret-key prefix ${redact(prefix)}`);
+  for (const { description, pattern } of SECRET_VALUE_PATTERNS) {
+    const match = pattern.exec(text);
+    if (match !== null) {
+      // Only the prefix is echoed. It is not the secret part, and the body must
+      // never reach a public build log.
+      findings.push(`${description} (${redact(match[0])})`);
     }
   }
 
