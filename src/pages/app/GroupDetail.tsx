@@ -11,6 +11,7 @@ import {
   useStartGroup,
 } from '@/lib/susu/hooks';
 import { useWallet } from '@/lib/wallet/context';
+import { InvitePanel } from '@/components/InvitePanel';
 import { OutcomeNotice } from '@/components/OutcomeNotice';
 import { AddressChip, Button, Card, Notice, Page, PageHeader, Spinner } from '@/components/ui';
 import { WalletButton } from '@/components/WalletButton';
@@ -284,6 +285,13 @@ export function GroupDetail() {
             <Notice tone="success" title="This group has completed every round">
               Each member has received the pool exactly once. The contract holds nothing.
             </Notice>
+          ) : null}
+
+          {/* Offered once the page has read this account's membership from the
+              chain. A UI affordance rather than a rule: the API imposes no such
+              check, because it has no way to make one. */}
+          {isMember && groupAddress !== undefined ? (
+            <InvitePanel groupContractId={groupAddress} />
           ) : null}
         </div>
       </div>
