@@ -34,6 +34,13 @@ export const envSchema = z.object({
   VITE_FACTORY_CONTRACT_ID: contractIdSchema,
   VITE_USDC_CONTRACT_ID: contractIdSchema,
   VITE_EXPLORER_BASE_URL: z.string().url(),
+  /**
+   * The application API. Optional, because the app still reads group state
+   * directly from the chain and works without a backend — only invite codes and
+   * notifications need one, and those screens say so rather than failing
+   * obscurely when it is absent.
+   */
+  VITE_API_BASE_URL: z.string().url().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
