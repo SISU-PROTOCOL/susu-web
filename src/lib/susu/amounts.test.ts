@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   I128_MAX,
   USDC_SCALE,
+  formatBaseUnits,
   formatUsdc,
+  parseBaseUnits,
   parseUsdc,
   splitPayout,
   type ParsedAmount,
@@ -156,5 +158,44 @@ describe('splitPayout', () => {
     expect(() => splitPayout(-1n, 50)).toThrow(RangeError);
     expect(() => splitPayout(100n, -1)).toThrow(RangeError);
     expect(() => splitPayout(100n, 1.5)).toThrow(RangeError);
+  });
+});
+
+describe('parseBaseUnits', () => {
+  it('reads an integer amount from the API as stroops', () => {
+    // 10 USDC as the indexer reports it.
+    expect(parseBaseUnits('10000000')).toBe(10_000_000n);
+    expect(parseBaseUnits('0')).toBe(0n);
+  });
+
+  it('handles amounts beyond what a double can hold exactly', () => {
+    // 2^53 stroops is where a JavaScript number stops being able to count by one.
+    // The API sends a string precisely so this value survives.
+    expect(parseBaseUnits('9007199254740993')).toBe(9_007_199_254_740_993n);
+  });
+
+  it('refuses a decimal, a sign, or anything else', () => {
+    // The API casts these columns to text and validates them as integers, so a
+    // value like this means the two sides disagree about the contract — which is
+    // worth an error rather than a silently rendered zero.
+    expect(() => parseBaseUnits('10.0000000')).toThrow();
+    expect(() => parseBaseUnits('-1')).toThrow();
+    expect(() => parseBaseUnits('')).toThrow();
+    expect(() => parseBaseUnits('1e7')).toThrow();
+    expect(() => parseBaseUnits('abc')).toThrow();
+  });
+});
+
+describe('formatBaseUnits', () => {
+  it('renders an API amount the way a person reads it', () => {
+    // USDC has seven decimals, so ten million base units is one USDC.
+    expect(formatBaseUnits('10000000')).toBe('1');
+    expect(formatBaseUnits('100000000')).toBe('10');
+    expect(formatBaseUnits('29850000')).toBe('2.985');
+    expect(formatBaseUnits('1')).toBe('0.0000001');
+  });
+
+  it('agrees with formatUsdc for the same value', () => {
+    expect(formatBaseUnits('150000')).toBe(formatUsdc(150_000n));
   });
 });

@@ -29,6 +29,33 @@ type SuccessBody<T> = { data: T };
 /** The envelope every failed response uses. */
 type FailureBody = { error?: unknown };
 
+/**
+ * The envelope a paginated list uses: the page's rows, plus where they sit.
+ *
+ * Distinct from `SuccessBody` because a caller paging a list needs the second
+ * half. Unwrapping `data` alone would hand back a page with no way to know
+ * whether asking for the next one is worth doing.
+ */
+type PageBody<T> = {
+  data: readonly T[];
+  page: { limit?: unknown; offset?: unknown; hasMore?: unknown };
+};
+
+/**
+ * One page of a paginated list.
+ *
+ * `hasMore` is the API's answer, not a guess from the row count: a page whose
+ * length equals the limit is ambiguous — it is the last page exactly as often as
+ * it is not — and guessing would either hide rows or offer a next page that is
+ * empty.
+ */
+export type ApiPage<T> = {
+  readonly items: readonly T[];
+  readonly hasMore: boolean;
+  readonly limit: number;
+  readonly offset: number;
+};
+
 export type RequestOptions = {
   readonly method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   /** Serialised as JSON. Omitted entirely when absent. */
@@ -78,13 +105,17 @@ function codeOf(body: unknown): string | undefined {
 }
 
 /**
- * Performs a request and returns the unwrapped `data`.
+ * Performs a request and returns the parsed body, or throws `ApiError`.
  *
- * Throws `ApiError` for anything other than a 2xx with a JSON body. A 204 has no
- * body by definition, so it resolves with `undefined` rather than failing to
- * parse.
+ * The single place the network is touched. `apiRequest` and `apiRequestPage`
+ * differ only in which half of the body they read, so keeping the fetch here
+ * means a change to timeouts, headers or error handling cannot apply to one and
+ * be forgotten in the other.
  */
-export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
+async function send(
+  path: string,
+  options: RequestOptions,
+): Promise<{ status: number; body: unknown }> {
   const headers: Record<string, string> = { accept: 'application/json' };
   if (options.body !== undefined) headers['content-type'] = 'application/json';
   if (options.token !== undefined) headers['authorization'] = `Bearer ${options.token}`;
@@ -116,14 +147,73 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     );
   }
 
-  if (response.status === 204) return undefined as T;
+  return { status: response.status, body };
+}
 
-  if (typeof body !== 'object' || body === null || !('data' in body)) {
+function hasData(body: unknown): body is SuccessBody<unknown> {
+  return typeof body === 'object' && body !== null && 'data' in body;
+}
+
+/**
+ * Reads a paginated body, or `undefined` if it is not one.
+ *
+ * Every field is checked rather than trusted. A `page` that is present but shaped
+ * differently — a renamed field, a stringified number — would otherwise become
+ * `undefined` in an `ApiPage`, and a caller comparing `hasMore` to `true` would
+ * quietly treat the end of the list as reached.
+ */
+function pageOf(body: unknown): ApiPage<unknown> | undefined {
+  if (!hasData(body)) return undefined;
+
+  const { data, page } = body as PageBody<unknown>;
+  if (!Array.isArray(data)) return undefined;
+  if (typeof page !== 'object' || page === null) return undefined;
+
+  const { limit, offset, hasMore } = page;
+  if (typeof limit !== 'number' || typeof offset !== 'number') return undefined;
+  if (typeof hasMore !== 'boolean') return undefined;
+
+  return { items: data, hasMore, limit, offset };
+}
+
+/**
+ * Performs a request and returns the unwrapped `data`.
+ *
+ * Throws `ApiError` for anything other than a 2xx with a JSON body. A 204 has no
+ * body by definition, so it resolves with `undefined` rather than failing to
+ * parse.
+ */
+export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const { status, body } = await send(path, options);
+
+  if (status === 204) return undefined as T;
+
+  if (!hasData(body)) {
     // A 2xx that is not the documented envelope means this client and the server
     // disagree about the contract, which is worth failing on rather than
     // returning `undefined` as though the call had succeeded.
-    throw new ApiError(response.status, undefined, 'The server returned an unexpected body.');
+    throw new ApiError(status, undefined, 'The server returned an unexpected body.');
   }
 
-  return (body as SuccessBody<T>).data;
+  return body.data as T;
+}
+
+/**
+ * Performs a request and returns one page of a list, `data` and `page` together.
+ *
+ * Separate from `apiRequest` rather than a flag on it, because the two return
+ * different things and a caller should have to say which it expects.
+ */
+export async function apiRequestPage<T>(
+  path: string,
+  options: RequestOptions = {},
+): Promise<ApiPage<T>> {
+  const { status, body } = await send(path, options);
+
+  const page = pageOf(body);
+  if (page === undefined) {
+    throw new ApiError(status, undefined, 'The server returned an unexpected page.');
+  }
+
+  return page as ApiPage<T>;
 }
