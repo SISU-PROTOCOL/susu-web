@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { apiRequest } from './client';
+import { apiRequest, apiRequestPage } from './client';
 import { ApiError, apiErrorMessage, isRetryableApiError } from './errors';
 
 /**
@@ -147,6 +147,70 @@ describe('apiRequest', () => {
     // Returning `undefined` here would make a contract mismatch look like a
     // successful call that produced nothing.
     await expect(apiRequest('groups')).rejects.toBeInstanceOf(ApiError);
+  });
+});
+
+describe('apiRequestPage', () => {
+  it('returns the rows and the page position together', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(200, {
+        data: [{ contractId: 'C1' }, { contractId: 'C2' }],
+        page: { limit: 20, offset: 0, hasMore: true },
+      }),
+    );
+
+    const page = await apiRequestPage<{ contractId: string }>('groups');
+
+    expect(page.items).toEqual([{ contractId: 'C1' }, { contractId: 'C2' }]);
+    expect(page.hasMore).toBe(true);
+    expect(page.limit).toBe(20);
+    expect(page.offset).toBe(0);
+  });
+
+  it('reports the end of a list', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(200, { data: [], page: { limit: 20, offset: 40, hasMore: false } }),
+    );
+
+    const page = await apiRequestPage('groups');
+
+    // An empty page is a definite answer, not an error: it is what the last page
+    // of a list looks like.
+    expect(page.items).toEqual([]);
+    expect(page.hasMore).toBe(false);
+  });
+
+  it('refuses a list body with no page', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(200, { data: [{ contractId: 'C1' }] }));
+
+    // Treating this as a complete list would render one row and no way to reach
+    // the rest, which reads as "that is everything".
+    await expect(apiRequestPage('groups')).rejects.toBeInstanceOf(ApiError);
+  });
+
+  it('refuses a page whose hasMore is not a boolean', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(200, { data: [], page: { limit: 20, offset: 0, hasMore: 'false' } }),
+    );
+
+    // A stringified boolean would make `hasMore === true` false and silently
+    // present the first page as the last.
+    await expect(apiRequestPage('groups')).rejects.toBeInstanceOf(ApiError);
+  });
+
+  it('reports the API’s error code for a refusal', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(404, { error: 'group_not_found' }));
+
+    await expect(apiRequestPage('groups/nope')).rejects.toMatchObject({
+      status: 404,
+      code: 'group_not_found',
+    });
+  });
+
+  it('reports an unreachable server as status 0', async () => {
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+
+    await expect(apiRequestPage('groups')).rejects.toMatchObject({ status: 0 });
   });
 });
 

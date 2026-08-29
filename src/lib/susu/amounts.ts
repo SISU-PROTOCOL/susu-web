@@ -107,6 +107,36 @@ export function formatUsdc(stroops: bigint): string {
   return `${whole.toString()}.${trimmed}`;
 }
 
+/** Base units as the API reports them: an integer, never a decimal or a sign. */
+const BASE_UNITS_PATTERN = /^\d+$/;
+
+/**
+ * Reads a base-unit amount that came from the API.
+ *
+ * The API selects monetary columns with `::text` so that a `numeric` never passes
+ * through a JavaScript number, and it validates that what it sends is an integer
+ * — so a value that does not match here is a contract mismatch rather than bad
+ * input, and throwing is the right response. Returning `0n` would render a real
+ * balance as nothing.
+ */
+export function parseBaseUnits(value: string): bigint {
+  if (!BASE_UNITS_PATTERN.test(value)) {
+    throw new Error(`Not a base-unit amount: ${JSON.stringify(value)}`);
+  }
+  return BigInt(value);
+}
+
+/**
+ * Renders a base-unit string from the API for display.
+ *
+ * The companion to `parseUsdc`, going the other way: that function turns what a
+ * person typed into stroops, this turns what the index reported into what a
+ * person reads.
+ */
+export function formatBaseUnits(value: string): string {
+  return formatUsdc(parseBaseUnits(value));
+}
+
 /**
  * Splits an amount into the protocol fee and what the recipient receives.
  *
