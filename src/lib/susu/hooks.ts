@@ -5,6 +5,7 @@ import {
   type UseMutationResult,
 } from '@tanstack/react-query';
 import { isRetryable, type InvocationFailure } from '../stellar/contract-errors';
+import { apiQueryKeys } from '../api/hooks';
 import { useInvocationContext, useStellar } from '../stellar/hooks';
 import {
   contribute,
@@ -202,6 +203,16 @@ export function useRound(groupAddress: string | undefined, round: number) {
  * Called after a confirmed action so screens re-read from the chain rather than
  * from an optimistic guess. The app never assumes what a transaction did; it
  * asks.
+ *
+ * THE INDEX IS INVALIDATED TOO, AND CANNOT ANSWER YET
+ * The protocol's own record is derived from the chain on a schedule, so this
+ * refetch will usually return the same rows it already had — the indexer may not
+ * have reached the ledger that the transaction is in. It is invalidated anyway
+ * because the alternative is worse: a cache told its data is good for another few
+ * seconds would keep showing a round as short a contribution the chain has
+ * already accepted, and the member who just paid would be looking at a list that
+ * omits them. Once invalidated, the next look at the page picks up the indexer's
+ * run whenever it happens.
  */
 function useRefreshGroup(groupAddress: string | undefined): () => Promise<void> {
   const client = useQueryClient();
@@ -214,6 +225,10 @@ function useRefreshGroup(groupAddress: string | undefined): () => Promise<void> 
       client.invalidateQueries({ queryKey: ['group', groupAddress, 'round'] }),
       client.invalidateQueries({ queryKey: ['group', groupAddress, 'member'] }),
       client.invalidateQueries({ queryKey: queryKeys.groupCount }),
+      // Joining changes which groups an account is in, so the lists are
+      // invalidated too, not only the group's own reads.
+      client.invalidateQueries({ queryKey: apiQueryKeys.groupLedger(groupAddress) }),
+      client.invalidateQueries({ queryKey: apiQueryKeys.allGroups }),
     ]);
   };
 }
@@ -230,7 +245,13 @@ export function useCreateGroup(): UseMutationResult<CreateGroupOutcome, Error, C
     },
     onSuccess: async (outcome) => {
       if (outcome.status === 'created') {
-        await client.invalidateQueries({ queryKey: queryKeys.groupCount });
+        // The new group belongs in every list, including the create-page's own
+        // account membership, and the index will report it once the indexer's
+        // next run sees the Factory's event.
+        await Promise.all([
+          client.invalidateQueries({ queryKey: queryKeys.groupCount }),
+          client.invalidateQueries({ queryKey: apiQueryKeys.allGroups }),
+        ]);
       }
     },
   });

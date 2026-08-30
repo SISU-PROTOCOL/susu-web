@@ -1,118 +1,60 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { formatUsdc } from '@/lib/susu/amounts';
-import {
-  useGroupAddress,
-  useGroupCount,
-  useGroupSnapshot,
-  useMemberPosition,
-} from '@/lib/susu/hooks';
-import { useWallet } from '@/lib/wallet/context';
-import {
-  AddressChip,
-  Button,
-  Card,
-  Field,
-  Notice,
-  Page,
-  PageHeader,
-  Spinner,
-} from '@/components/ui';
+import { useIndexedGroups } from '@/lib/api/hooks';
+import { apiErrorMessage } from '@/lib/api/errors';
+import { useGroupCount } from '@/lib/susu/hooks';
+import { IndexedGroupCard } from '@/components/IndexedGroupCard';
+import { Button, Card, Field, Notice, Page, PageHeader, Spinner } from '@/components/ui';
 import { WalletButton } from '@/components/WalletButton';
 
 /**
  * Groups.
  *
- * A group's address is derived from its id, so groups are discoverable by
- * walking ids. That is fine for a handful and wrong for thousands: this screen
- * scans only the most recent few and says so. Complete history needs the
- * indexer, and pretending otherwise would mean showing an incomplete list as if
- * it were all of them.
+ * THIS USED TO SCAN
+ * The first version of this screen walked the Factory's group ids and read each
+ * one from the chain, showing the most recent handful and admitting that older
+ * ones were unreachable. That was honest but incomplete: a list that stops at
+ * twelve is not a list, and the id-to-address walk costs one RPC round trip per
+ * group. Now the index answers it, completely and in one request.
+ *
+ * WHAT THE INDEX IS FOR HERE
+ * Enumeration. The chain has no way to list groups — a group is addressed by the
+ * hash of its own deployment — so a complete list can only come from something
+ * that watched every group's creation. That is what the indexer is.
+ *
+ * The trade is freshness: the index lags the chain by up to one indexing run. So
+ * this screen never acts on what it lists; each row links to the group page, which
+ * reads the contract. And because an index can also simply be behind, the Factory's
+ * own count is shown alongside when the two disagree — a mismatch is worth saying
+ * rather than hiding, and hiding it would mean presenting an incomplete list as
+ * though it were everything.
  */
 
-/** How many of the most recent groups this screen will look up. */
-const SCAN_LIMIT = 12;
-
-function GroupRow({ id }: { id: number }) {
-  const { address: connected } = useWallet();
-  const addressQuery = useGroupAddress(id);
-  const snapshot = useGroupSnapshot(addressQuery.data);
-  const position = useMemberPosition(addressQuery.data, connected);
-
-  if (addressQuery.isPending || snapshot.isPending) {
-    return (
-      <Card>
-        <p className="flex items-center gap-2 text-sm text-neutral-500">
-          <Spinner /> Group #{id}
-        </p>
-      </Card>
-    );
-  }
-
-  const group = snapshot.data;
-  const groupAddress = addressQuery.data;
-
-  if (group === undefined || groupAddress === undefined) {
-    return (
-      <Card>
-        <p className="text-sm text-neutral-500">
-          Group #{id} could not be read
-          {snapshot.error === null || snapshot.error === undefined
-            ? '.'
-            : `: ${snapshot.error.message}`}
-        </p>
-      </Card>
-    );
-  }
-
-  const isMember = (position.data ?? 0) > 0;
-
-  return (
-    <Card>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-neutral-500">#{id}</span>
-            <AddressChip value={groupAddress} />
-            {isMember ? (
-              <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-xs text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200">
-                member
-              </span>
-            ) : null}
-          </div>
-          <p className="mt-2 text-sm">
-            <span className="font-mono">{formatUsdc(group.config.contributionAmount)} USDC</span>{' '}
-            per round · {group.memberCount} of {group.config.memberCapacity} members ·{' '}
-            <span className="text-neutral-600 dark:text-neutral-400">{group.status}</span>
-          </p>
-        </div>
-        <Link
-          to={`/app/groups/${groupAddress}`}
-          className="text-sm font-medium underline underline-offset-2"
-        >
-          Open
-        </Link>
-      </div>
-    </Card>
-  );
-}
+/** A group address: `C` followed by 55 base-32 characters. */
+const CONTRACT_ID_PATTERN = /^C[A-Z2-7]{55}$/;
 
 export function Groups() {
   const navigate = useNavigate();
-  const count = useGroupCount();
+  const groups = useIndexedGroups();
+  const factoryCount = useGroupCount();
   const [openAddress, setOpenAddress] = useState('');
 
-  const total = count.data ?? 0;
-  const newest = total;
-  const oldest = Math.max(1, total - SCAN_LIMIT + 1);
-  const ids: number[] = [];
-  for (let id = newest; id >= oldest; id -= 1) ids.push(id);
+  const items = groups.data?.pages.flatMap((page) => page.items) ?? [];
+  const lastPage = groups.data?.pages.at(-1);
+
+  // Only meaningful once both have answered, and only when they disagree in the
+  // direction that loses rows.
+  const indexedBehind =
+    groups.isSuccess &&
+    factoryCount.data !== undefined &&
+    factoryCount.data > items.length &&
+    lastPage?.hasMore !== true;
 
   return (
     <Page>
       <PageHeader
         title="Groups"
-        description="Groups deployed through the Factory."
+        description="Every group deployed through the Factory, as recorded by the protocol index."
         actions={
           <span className="flex items-center gap-2">
             <WalletButton />
@@ -139,7 +81,7 @@ export function Groups() {
           <div className="mt-3">
             <Button
               variant="secondary"
-              disabled={!/^C[A-Z2-7]{55}$/.test(openAddress)}
+              disabled={!CONTRACT_ID_PATTERN.test(openAddress)}
               onClick={() => void navigate(`/app/groups/${openAddress}`)}
             >
               Open group
@@ -147,36 +89,58 @@ export function Groups() {
           </div>
         </Card>
 
-        {count.isPending ? (
+        {groups.isPending ? (
           <p className="flex items-center gap-2 text-sm text-neutral-500">
-            <Spinner /> Counting groups…
+            <Spinner /> Reading the index…
           </p>
         ) : null}
 
-        {count.isError ? (
-          <Notice tone="danger" title="Could not reach the Factory">
-            {count.error.message}
+        {groups.isError ? (
+          <Notice tone="warning" title="Groups could not be listed">
+            {apiErrorMessage(groups.error)} A group can still be opened by its address above.
           </Notice>
         ) : null}
 
-        {count.isSuccess && total === 0 ? (
+        {indexedBehind ? (
+          <Notice tone="warning" title="The index is behind the Factory">
+            The Factory reports {factoryCount.data} group{factoryCount.data === 1 ? '' : 's'} and
+            the index has {items.length}. The indexer may not have run yet, so this list can be
+            missing recent groups.
+          </Notice>
+        ) : null}
+
+        {groups.isSuccess && items.length === 0 && !indexedBehind ? (
           <Notice tone="neutral" title="No groups yet">
             Once a group is created it will appear here. Creating one deploys its own contract.
           </Notice>
         ) : null}
 
-        {total > SCAN_LIMIT ? (
-          <Notice tone="neutral" title={`Showing the ${SCAN_LIMIT} most recent of ${total} groups`}>
-            Group history is not indexed yet, so older groups are reached by their address rather
-            than listed here.
-          </Notice>
+        {items.length === 0 ? null : (
+          <ul className="space-y-3">
+            {items.map((group) => (
+              <li key={group.contractId}>
+                <IndexedGroupCard group={group} />
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {lastPage?.hasMore === true ? (
+          <Button
+            variant="secondary"
+            pending={groups.isFetchingNextPage}
+            onClick={() => void groups.fetchNextPage()}
+          >
+            Show more groups
+          </Button>
         ) : null}
 
-        <div className="space-y-3">
-          {ids.map((id) => (
-            <GroupRow key={id} id={id} />
-          ))}
-        </div>
+        {items.length === 0 ? null : (
+          <p className="text-xs text-neutral-500">
+            Listed from the protocol index, which trails the chain by up to one indexing run. Open a
+            group to read its current state from the contract.
+          </p>
+        )}
       </div>
     </Page>
   );
