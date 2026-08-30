@@ -1,20 +1,134 @@
 import { Link } from 'react-router';
+import { useMemberGroups } from '@/lib/api/hooks';
+import { apiErrorMessage } from '@/lib/api/errors';
 import { useFactoryConfig, useGroupCount } from '@/lib/susu/hooks';
 import { useStellar } from '@/lib/stellar/hooks';
 import { useWallet } from '@/lib/wallet/context';
-import { AddressChip, Card, Notice, Page, PageHeader, Spinner } from '@/components/ui';
+import { IndexedGroupCard } from '@/components/IndexedGroupCard';
+import { AddressChip, Button, Card, Notice, Page, PageHeader, Spinner } from '@/components/ui';
 import { WalletButton } from '@/components/WalletButton';
 
 /**
  * Overview.
  *
- * Everything shown here is read from chain or from configuration. There are no
- * simulated balances and no placeholder figures: a number on this screen is a
- * number the network reported.
+ * TWO KINDS OF FACT, KEPT APART
+ * The protocol panel and the contract addresses are read from the chain, and the
+ * panel is what a member would check before trusting this screen at all: the fee
+ * the contract charges and whether new groups are open. The group list is read
+ * from the index, because "which groups am I in" is a question the chain cannot
+ * answer — nothing on-chain maps an account to the groups it belongs to, and
+ * walking every group id to find out is a scan that is wrong at any real size.
+ *
+ * The index trails the chain by up to one indexing run, which is why every group
+ * here links to a page that reads the contract directly. A number on this screen
+ * is a number the network reported, and the screen where money moves is the one
+ * that asks the network again.
  */
+
+/** What a member can do next, given where their groups are. */
+function attentionLine(activeCount: number, openCount: number): string | undefined {
+  // At most one suggestion, and only one that is certainly true. Claiming a
+  // contribution is due would need to know whether this member has already paid
+  // this round, which the group summary does not say — and a dashboard that
+  // guesses at an obligation is worse than one that stays quiet.
+  if (activeCount > 0) {
+    return `${activeCount} group${activeCount === 1 ? ' is' : 's are'} collecting contributions.`;
+  }
+  if (openCount > 0) {
+    return `${openCount} group${openCount === 1 ? ' is' : 's are'} still filling up.`;
+  }
+  return undefined;
+}
+
+function YourGroups() {
+  const { status, address } = useWallet();
+  const connected = status === 'connected' && address !== undefined;
+  const groups = useMemberGroups(connected ? address : undefined);
+
+  if (!connected) {
+    return (
+      <Card>
+        <h2 className="text-sm font-medium">Your groups</h2>
+        <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400">
+          Connect a wallet to see the groups this account belongs to. Browsing needs no wallet.
+        </p>
+      </Card>
+    );
+  }
+
+  const items = groups.data?.pages.flatMap((page) => page.items) ?? [];
+  const lastPage = groups.data?.pages.at(-1);
+  const activeCount = items.filter((group) => group.status === 'active').length;
+  const openCount = items.filter((group) => group.status === 'open').length;
+  const attention = attentionLine(activeCount, openCount);
+
+  return (
+    <Card>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-sm font-medium">Your groups</h2>
+        {attention === undefined ? null : <p className="text-xs text-neutral-500">{attention}</p>}
+      </div>
+
+      {groups.isPending ? (
+        <p className="mt-3 flex items-center gap-2 text-sm text-neutral-500">
+          <Spinner /> Reading the index…
+        </p>
+      ) : null}
+
+      {groups.isError ? (
+        <div className="mt-3">
+          {/* An unavailable index is not an empty list. Saying "you have no
+              groups" here would be a confident answer to a question that was
+              never answered — so the failure is named, and the way to reach a
+              group you already know the address of is offered instead. */}
+          <Notice tone="warning" title="Your groups could not be listed">
+            {apiErrorMessage(groups.error)} You can still open a group by its address.
+          </Notice>
+        </div>
+      ) : null}
+
+      {groups.isSuccess && items.length === 0 ? (
+        <div className="mt-3 space-y-3">
+          <Notice tone="neutral" title="This account is not in a group yet">
+            Join one from an invite link, or create one of your own.
+          </Notice>
+        </div>
+      ) : null}
+
+      {items.length > 0 ? (
+        <ul className="mt-4 space-y-3">
+          {items.map((group) => (
+            <li key={group.contractId}>
+              <IndexedGroupCard group={group} />
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {lastPage?.hasMore === true ? (
+        <div className="mt-4">
+          <Button
+            variant="secondary"
+            pending={groups.isFetchingNextPage}
+            onClick={() => void groups.fetchNextPage()}
+          >
+            Show more
+          </Button>
+        </div>
+      ) : null}
+
+      <p className="mt-4 text-xs text-neutral-500">
+        Listed from the protocol index, which can lag the chain.{' '}
+        <Link to="/app/groups" className="font-medium underline underline-offset-2">
+          Browse all groups
+        </Link>
+      </p>
+    </Card>
+  );
+}
+
 export function Dashboard() {
   const { contracts, network } = useStellar();
-  const { status, address } = useWallet();
   const config = useFactoryConfig();
   const count = useGroupCount();
 
@@ -27,18 +141,7 @@ export function Dashboard() {
       />
 
       <div className="mt-8 space-y-6">
-        {status === 'connected' && address !== undefined ? (
-          <Card>
-            <p className="text-sm text-neutral-600 dark:text-neutral-400">Connected as</p>
-            <div className="mt-1">
-              <AddressChip value={address} />
-            </div>
-          </Card>
-        ) : (
-          <Notice tone="neutral" title="No wallet connected">
-            Connect a wallet to create a group, join one, or contribute. Browsing needs no wallet.
-          </Notice>
-        )}
+        <YourGroups />
 
         <Card>
           <h2 className="text-sm font-medium">Protocol</h2>
