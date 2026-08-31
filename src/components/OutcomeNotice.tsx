@@ -64,6 +64,27 @@ function ExplorerLink({ hash }: { hash: string }) {
   );
 }
 
+/**
+ * The protocol's own record of the transaction, as decoded events.
+ *
+ * Offered next to the explorer link because the two answer different questions.
+ * The explorer shows the ledger — the authoritative artifact, in XDR. This shows
+ * what the Susu contracts emitted, in the vocabulary the protocol uses, and is
+ * how a member confirms that a contribution was recorded as theirs rather than
+ * merely that some transaction succeeded.
+ *
+ * It is a link to a page that reads the index, so it can be a few minutes behind
+ * for a transaction that was just sent; the page says so rather than appearing
+ * empty.
+ */
+function ReceiptLink({ hash }: { hash: string }) {
+  return (
+    <a href={`/app/transactions/${hash}`} className="font-medium underline underline-offset-2">
+      See what the contract recorded
+    </a>
+  );
+}
+
 export function FailureNotice({ failure }: { failure: InvocationFailure }) {
   return (
     <Notice tone={failure.kind === 'contract-error' ? 'warning' : 'danger'} title={failure.message}>
@@ -82,7 +103,8 @@ export function OutcomeNotice({ outcome }: { outcome: ReportableOutcome }) {
       return (
         <Notice tone="success" title="Confirmed on-chain">
           <p>
-            Applied in ledger {outcome.ledger}. <ExplorerLink hash={outcome.hash} />
+            Applied in ledger {outcome.ledger}. <ExplorerLink hash={outcome.hash} /> ·{' '}
+            <ReceiptLink hash={outcome.hash} />
           </p>
         </Notice>
       );
@@ -97,7 +119,8 @@ export function OutcomeNotice({ outcome }: { outcome: ReportableOutcome }) {
               className="font-medium underline underline-offset-2"
             >
               Open the new group
-            </a>
+            </a>{' '}
+            · <ReceiptLink hash={outcome.hash} />
           </p>
         </Notice>
       );
@@ -118,7 +141,7 @@ export function OutcomeNotice({ outcome }: { outcome: ReportableOutcome }) {
           <p>
             {outcome.reason}. This does not mean it failed — it may still be included in a later
             ledger. Check the block explorer before trying again.{' '}
-            <ExplorerLink hash={outcome.hash} />
+            <ExplorerLink hash={outcome.hash} /> · <ReceiptLink hash={outcome.hash} />
           </p>
         </Notice>
       );

@@ -11,6 +11,7 @@ import {
   useStartGroup,
 } from '@/lib/susu/hooks';
 import { useWallet } from '@/lib/wallet/context';
+import { GroupLedger } from '@/components/GroupLedger';
 import { InvitePanel } from '@/components/InvitePanel';
 import { OutcomeNotice } from '@/components/OutcomeNotice';
 import { AddressChip, Button, Card, Notice, Page, PageHeader, Spinner } from '@/components/ui';
@@ -286,6 +287,13 @@ export function GroupDetail() {
               Each member has received the pool exactly once. The contract holds nothing.
             </Notice>
           ) : null}
+
+          {/* The chain answers "how much has this round collected"; only the
+              record of events answers "who paid". Placed after the actions
+              because it is reference material rather than something to act on. */}
+          {groupAddress === undefined ? null : (
+            <GroupLedger groupContractId={groupAddress} viewer={address} />
+          )}
 
           {/* Offered once the page has read this account's membership from the
               chain. A UI affordance rather than a rule: the API imposes no such
