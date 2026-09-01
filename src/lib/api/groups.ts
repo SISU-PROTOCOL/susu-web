@@ -26,6 +26,7 @@
  * `formatUsdc`'s job.
  */
 import { apiRequest, apiRequestPage, type ApiPage } from './client';
+import { getAccessToken } from './token';
 
 /** The statuses the contract uses. Not an open set: the API rejects others. */
 export type GroupStatus = 'open' | 'active' | 'completed';
@@ -250,4 +251,62 @@ export async function getTransactionReceipt(
 /** Whether a string is a 32-byte transaction hash, as the RPC reports it. */
 export function looksLikeTransactionHash(value: string): boolean {
   return /^[0-9a-fA-F]{64}$/.test(value);
+}
+
+/** What the API reports about a claim: the address, and when it lapses. */
+export type RegisteredGroup = {
+  readonly contractId: string;
+  /** ISO 8601. After this, only the index can vouch for the address. */
+  readonly expiresAt: string;
+};
+
+/**
+ * Tells the API that an address the chain has just produced is a group.
+ *
+ * WHY THIS CALL EXISTS
+ * A group's address is the hash of its own deployment, so the API learns groups by
+ * watching the Factory emit them — which the indexer does on a schedule. Between a
+ * creator's confirmation and the next indexing run the address is real and unknown
+ * to the API, and creating an invite is refused for a group the API cannot find. So
+ * a creator would create a group and be unable to invite anyone to it, which is the
+ * middle of the document's core journey.
+ *
+ * This does not create anything. The group was created by the transaction that
+ * deployed it; what is registered is that the address is known, for a bounded
+ * window. Nothing financial reads it, and the index supersedes it.
+ *
+ * The claim is tied to the caller's session and cannot be made anonymously, which
+ * is why it takes a token.
+ */
+export async function registerGroup(contractId: string, token: string): Promise<RegisteredGroup> {
+  return apiRequest<RegisteredGroup>('groups', {
+    method: 'POST',
+    token,
+    body: { contractId },
+  });
+}
+
+/**
+ * The same claim, for a caller that must not fail.
+ *
+ * Called after a group is confirmed, on a path whose success the user is entitled
+ * to regardless of whether this call works. Everything here is a reason the
+ * registration may legitimately not happen: nobody is signed in, the API is down,
+ * the session expired, or the account is holding its few live registrations.
+ *
+ * None of those is worth an error message, because the consequence is only a wait.
+ * The group exists on chain, the index will report it within one run, and until
+ * then the invite panel says the group is not known yet — which is true. So the
+ * result is a boolean for callers that want to say something, not a thrown error.
+ */
+export async function registerGroupQuietly(contractId: string): Promise<boolean> {
+  const token = await getAccessToken();
+  if (token === undefined) return false;
+
+  try {
+    await registerGroup(contractId, token);
+    return true;
+  } catch {
+    return false;
+  }
 }
