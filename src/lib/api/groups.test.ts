@@ -14,8 +14,26 @@ const ENV = {
 
 vi.mock('../env', () => ({ getEnv: () => ENV }));
 
-const { listGroups, getGroup, listActivity, getTransactionReceipt, looksLikeTransactionHash } =
-  await import('./groups');
+// The session `registerGroupQuietly` reads its token from. Held in a ref so the
+// "nobody is signed in" path — the one that must not throw — can be exercised.
+const sessionRef = vi.hoisted(() => ({
+  current: { access_token: 'a-token' } as { access_token: string } | null,
+}));
+vi.mock('../supabase', () => ({
+  getSupabaseClient: () => ({
+    auth: { getSession: async () => ({ data: { session: sessionRef.current } }) },
+  }),
+}));
+
+const {
+  listGroups,
+  getGroup,
+  listActivity,
+  getTransactionReceipt,
+  looksLikeTransactionHash,
+  registerGroup,
+  registerGroupQuietly,
+} = await import('./groups');
 
 const GROUP = `C${'A'.repeat(55)}`;
 const MEMBER = `G${'B'.repeat(55)}`;
@@ -26,6 +44,7 @@ let fetchMock: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   fetchMock = vi.fn();
   vi.stubGlobal('fetch', fetchMock);
+  sessionRef.current = { access_token: 'a-token' };
 });
 
 afterEach(() => {
@@ -229,5 +248,52 @@ describe('looksLikeTransactionHash', () => {
     expect(looksLikeTransactionHash(HASH.slice(0, 63))).toBe(false);
     expect(looksLikeTransactionHash(HASH.slice(0, 63) + 'z')).toBe(false);
     expect(looksLikeTransactionHash(GROUP)).toBe(false);
+  });
+});
+
+describe('registerGroup', () => {
+  it('posts the address with the caller’s token', async () => {
+    fetchMock.mockResolvedValue(ok({ contractId: GROUP, expiresAt: '2026-01-01T00:30:00.000Z' }));
+
+    const registered = await registerGroup(GROUP, 'a-token');
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.example.test/api/v1/groups');
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(String(init.body))).toEqual({ contractId: GROUP });
+    expect(registered.expiresAt).toBe('2026-01-01T00:30:00.000Z');
+  });
+});
+
+describe('registerGroupQuietly', () => {
+  it('reports success when the API records the claim', async () => {
+    fetchMock.mockResolvedValue(ok({ contractId: GROUP, expiresAt: '2026-01-01T00:30:00.000Z' }));
+
+    await expect(registerGroupQuietly(GROUP)).resolves.toBe(true);
+  });
+
+  it('reports failure without a request when nobody is signed in', async () => {
+    sessionRef.current = null;
+
+    await expect(registerGroupQuietly(GROUP)).resolves.toBe(false);
+    // No token, so there is no call to make. Sending one would be a 401 and a
+    // wasted round trip on a path that already has a fallback.
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('reports failure rather than throwing when the API refuses', async () => {
+    // The account is holding its live registrations, or the API is down. Either
+    // way the group exists on chain, so a caller must not see an error.
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ error: 'too_many_registrations' }), { status: 409 }),
+    );
+
+    await expect(registerGroupQuietly(GROUP)).resolves.toBe(false);
+  });
+
+  it('reports failure rather than throwing when the network is unreachable', async () => {
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+
+    await expect(registerGroupQuietly(GROUP)).resolves.toBe(false);
   });
 });

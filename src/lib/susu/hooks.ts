@@ -6,6 +6,7 @@ import {
 } from '@tanstack/react-query';
 import { isRetryable, type InvocationFailure } from '../stellar/contract-errors';
 import { apiQueryKeys } from '../api/hooks';
+import { registerGroupQuietly } from '../api/groups';
 import { useInvocationContext, useStellar } from '../stellar/hooks';
 import {
   contribute,
@@ -245,6 +246,13 @@ export function useCreateGroup(): UseMutationResult<CreateGroupOutcome, Error, C
     },
     onSuccess: async (outcome) => {
       if (outcome.status === 'created') {
+        // Registered before the lists are invalidated, so the group is known to
+        // the API by the time the invite panel is rendered on the group's own
+        // page. Best-effort on purpose — see `registerGroupQuietly`: the group
+        // exists on chain whether or not this succeeds, and the only cost of a
+        // failure is that sharing an invite waits for the indexer.
+        await registerGroupQuietly(outcome.groupAddress);
+
         // The new group belongs in every list, including the create-page's own
         // account membership, and the index will report it once the indexer's
         // next run sees the Factory's event.
