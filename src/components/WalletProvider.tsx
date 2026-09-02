@@ -83,13 +83,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const connect = useCallback(async (): Promise<void> => {
+  const connect = useCallback(async (): Promise<WalletAccount | undefined> => {
     const target = wallet ?? (await listAvailableWallets())[0];
 
     if (target === undefined) {
       setError(new WalletError('unavailable', 'No Stellar wallet was found in this browser.'));
       setStatus('unavailable');
-      return;
+      return undefined;
     }
 
     setStatus('connecting');
@@ -97,17 +97,19 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
     try {
       const connected = await target.connect();
-      if (!isMounted.current) return;
+      if (!isMounted.current) return undefined;
       setWallet(target);
       setAccount(connected);
       setStatus('connected');
+      return connected;
     } catch (cause) {
-      if (!isMounted.current) return;
+      if (!isMounted.current) return undefined;
       // A declined prompt leaves the session exactly as it was: still
       // disconnected. It is a decision, not a fault, so it must not be rendered
       // as a broken state.
       setError(toWalletError(cause));
       setStatus('disconnected');
+      return undefined;
     }
   }, [wallet]);
 

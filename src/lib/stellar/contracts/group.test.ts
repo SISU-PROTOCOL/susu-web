@@ -48,6 +48,9 @@ function fakeWallet(): WalletAdapter & { signCalls: number } {
       this.signCalls += 1;
       return Promise.resolve({ signedTxXdr: xdrString, signerAddress: ACCOUNT });
     },
+    signMessage() {
+      return Promise.reject(new WalletError('unavailable', 'This fake wallet signs no messages.'));
+    },
   };
 }
 
