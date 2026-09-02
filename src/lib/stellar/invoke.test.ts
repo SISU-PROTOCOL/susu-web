@@ -41,6 +41,9 @@ function fakeWallet(options: { behaviour?: 'sign' | 'reject' } = {}): WalletAdap
       }
       return Promise.resolve({ signedTxXdr: xdrString, signerAddress: READ_ONLY_SOURCE });
     },
+    signMessage() {
+      return Promise.reject(new WalletError('unavailable', 'This fake wallet signs no messages.'));
+    },
   };
 }
 

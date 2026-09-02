@@ -217,3 +217,29 @@ export async function apiRequestPage<T>(
 
   return page as ApiPage<T>;
 }
+
+/**
+ * Reads a paginated body *and* the rest of it.
+ *
+ * `GET /notifications` answers with a page and an unread count in the same body,
+ * and the count is not derivable from the rows: a filtered page does not say how
+ * many unread rows lie outside it. `apiRequestPage` deliberately returns only the
+ * page — every other list has nothing else to say — so this is the variant for an
+ * endpoint that does.
+ *
+ * `pageOf` still validates the page, so a caller cannot be handed an `unreadCount`
+ * from a response whose rows were shaped differently than expected.
+ */
+export async function apiRequestPageBody<T>(
+  path: string,
+  options: RequestOptions = {},
+): Promise<{ page: ApiPage<T>; body: Record<string, unknown> }> {
+  const { status, body } = await send(path, options);
+
+  const page = pageOf(body);
+  if (page === undefined) {
+    throw new ApiError(status, undefined, 'The server returned an unexpected page.');
+  }
+
+  return { page: page as ApiPage<T>, body: body as Record<string, unknown> };
+}

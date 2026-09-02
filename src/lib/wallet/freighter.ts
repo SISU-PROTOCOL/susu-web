@@ -3,11 +3,14 @@ import {
   isAllowed,
   isConnected,
   requestAccess,
+  signMessage as freighterSignMessage,
   signTransaction as freighterSignTransaction,
 } from '@stellar/freighter-api';
 import { WalletError, type WalletErrorCode } from './errors';
 import type {
+  SignedMessage,
   SignedTransaction,
+  SignMessageOptions,
   SignTransactionOptions,
   WalletAccount,
   WalletAdapter,
@@ -75,6 +78,37 @@ function unwrap<T extends ErrorBearing>(response: T, context: string): T {
     });
   }
   return response;
+}
+
+/**
+ * A signature the extension returned, as a base64 string.
+ *
+ * Two shapes are in the wild: older versions hand back a `Buffer` and newer ones
+ * a string, and the declared type is the union. Converting here means the rest of
+ * the app sees one thing.
+ *
+ * The exact length is not checked. The API decodes a signature and requires
+ * exactly 64 bytes, so a wrong-length value is already refused there — and a
+ * local check strict enough to be meaningful would be a second implementation of
+ * that rule, which is the kind of duplication that goes wrong when one side
+ * changes. What is checked is that the value is plausibly base64 text: a missing
+ * signature is the case worth naming differently, because it means the wallet did
+ * not sign rather than that it signed the wrong thing.
+ */
+function normaliseSignature(value: unknown): string | undefined {
+  const candidate =
+    typeof value === 'string'
+      ? value
+      : value === null || value === undefined
+        ? ''
+        : typeof (value as { toString?: unknown }).toString === 'function'
+          ? (value as { toString(encoding?: string): string }).toString('base64')
+          : '';
+
+  const trimmed = candidate.trim();
+  if (trimmed.length === 0) return undefined;
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(trimmed)) return undefined;
+  return trimmed;
 }
 
 export const freighterWallet: WalletAdapter = {
@@ -173,5 +207,38 @@ export const freighterWallet: WalletAdapter = {
     }
 
     return { signedTxXdr: response.signedTxXdr, signerAddress: response.signerAddress };
+  },
+
+  async signMessage(message: string, options: SignMessageOptions): Promise<SignedMessage> {
+    const request: { networkPassphrase: string; address?: string } = {
+      networkPassphrase: options.networkPassphrase,
+    };
+    if (options.address !== undefined) request.address = options.address;
+
+    const response = unwrap(
+      (await freighterSignMessage(message, request)) as unknown as {
+        signedMessage: string | { toString(encoding?: string): string } | null;
+        signerAddress: string;
+      } & ErrorBearing,
+      'Freighter message signing',
+    );
+
+    const signature = normaliseSignature(response.signedMessage);
+    if (signature === undefined) {
+      // Distinct from the API's `invalid_signature`: this means the wallet handed
+      // back nothing signable, so asking it again is the remedy rather than
+      // starting the link over.
+      throw new WalletError('malformed-response', 'Freighter returned no message signature.');
+    }
+
+    if (options.address !== undefined && response.signerAddress !== options.address) {
+      throw new WalletError(
+        'account-mismatch',
+        'The wallet signed with a different account than the one requested. ' +
+          'This usually means the active account was switched. Nothing was linked.',
+      );
+    }
+
+    return { signature, signerAddress: response.signerAddress };
   },
 };

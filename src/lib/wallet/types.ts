@@ -36,6 +36,19 @@ export interface SignedTransaction {
   readonly signerAddress: string;
 }
 
+export interface SignMessageOptions {
+  /** The passphrase of the network the signature is bound to. */
+  readonly networkPassphrase: string;
+  /** The account expected to sign; a signature from another is rejected. */
+  readonly address?: string;
+}
+
+/** A signature over arbitrary text, base64, and the account that produced it. */
+export interface SignedMessage {
+  readonly signature: string;
+  readonly signerAddress: string;
+}
+
 export interface WalletAdapter {
   readonly id: WalletId;
   readonly name: string;
@@ -60,4 +73,17 @@ export interface WalletAdapter {
    * submit anything, and a result here is not proof that anything happened.
    */
   signTransaction(xdr: string, options: SignTransactionOptions): Promise<SignedTransaction>;
+
+  /**
+   * Signs arbitrary text, which is how a wallet proves it is yours.
+   *
+   * SEP-53, the scheme Stellar wallets implement for "sign this message". The
+   * text is never chosen by the caller that displays it: the API sends the exact
+   * string to sign, and this passes it through unchanged, because a signature
+   * over text the signer composed proves nothing about the request it came with.
+   *
+   * No funds move and nothing is submitted. It is a proof of key control, and the
+   * only thing it is used for here is binding an address to an account.
+   */
+  signMessage(message: string, options: SignMessageOptions): Promise<SignedMessage>;
 }

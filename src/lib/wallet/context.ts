@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react';
-import type { WalletAdapter, WalletError } from './index';
+import type { WalletAccount, WalletAdapter, WalletError } from './index';
 
 /**
  * Wallet session state.
@@ -39,8 +39,16 @@ export interface WalletContextValue {
   readonly available: readonly WalletAdapter[];
   /** The reason the last connection attempt failed, if any. */
   readonly error: WalletError | undefined;
-  /** Requests access. Call from a user gesture, never on mount. */
-  connect(): Promise<void>;
+  /**
+   * Requests access. Call from a user gesture, never on mount.
+   *
+   * Returns the account on success, and `undefined` when the user declined or no
+   * wallet is present. `address` in this context updates on the next render, so a
+   * caller that has to *use* the address immediately — linking it to an account,
+   * which asks it to sign before anything is stored — needs it as a return value
+   * rather than by waiting for a re-render it does not control.
+   */
+  connect(): Promise<WalletAccount | undefined>;
   /** Forgets the local session. Does not, and cannot, revoke anything on-chain. */
   disconnect(): void;
 }

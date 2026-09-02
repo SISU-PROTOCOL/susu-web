@@ -27,6 +27,7 @@ import {
   useInfiniteQuery,
   useMutation,
   useQuery,
+  useQueryClient,
   type UseMutationResult,
   type UseQueryResult,
 } from '@tanstack/react-query';
@@ -39,6 +40,16 @@ import {
   type Invite,
   type RedeemedInvite,
 } from './invites';
+import {
+  deleteAccount,
+  getMe,
+  listMyActivity,
+  updateMe,
+  type Account,
+  type ProfileChanges,
+} from './me';
+import { listNotifications, markNotificationRead } from './notifications';
+import { requestWalletNonce, verifyWalletLink, type LinkedWallet } from './wallet';
 import {
   getTransactionReceipt,
   listContributions,
@@ -93,6 +104,20 @@ export const apiQueryKeys = {
   contributions: (contractId: string) => ['api', 'group', contractId, 'contributions'] as const,
   payouts: (contractId: string) => ['api', 'group', contractId, 'payouts'] as const,
   transaction: (hash: string) => ['api', 'transaction', hash] as const,
+  /** The signed-in account. One key, because there is one account per session. */
+  me: ['api', 'me'] as const,
+  /** The caller's own feed. */
+  myActivity: ['api', 'me', 'activity'] as const,
+  /**
+   * Notifications, as an invalidation prefix and per filter.
+   *
+   * A separate key per filter rather than one key with the filter in the query:
+   * the unread-only list and the full list hold different rows, and sharing a
+   * cache entry between them would make the badge and the list disagree.
+   */
+  allNotifications: ['api', 'notifications'] as const,
+  notifications: (unreadOnly: boolean) =>
+    [...apiQueryKeys.allNotifications, unreadOnly ? 'unread' : 'all'] as const,
 };
 
 /** Rows per request for a group's event history. */
@@ -284,6 +309,154 @@ export function useRedeemInvite(): UseMutationResult<RedeemedInvite, Error, { co
   return useMutation<RedeemedInvite, Error, { code: string }>({
     mutationFn: async ({ code }) => redeemInvite(code, await requireToken()),
     retry: false,
+  });
+}
+
+/**
+ * The signed-in account.
+ *
+ * Account data is not the index: nothing about it changes because the indexer
+ * ran, so it does not poll. It is invalidated by the mutations below instead,
+ * which is what keeps a rename or a photo from being the one change the screen
+ * does not show.
+ */
+export function useMe(): UseQueryResult<Account, Error> {
+  return useQuery<Account, Error>({
+    queryKey: apiQueryKeys.me,
+    queryFn: async ({ signal }) => getMe(await requireToken(), signal),
+    retry: retryRead,
+  });
+}
+
+/** Applies profile changes and refreshes the account. */
+export function useUpdateProfile(): UseMutationResult<Account, Error, ProfileChanges> {
+  const queryClient = useQueryClient();
+
+  return useMutation<Account, Error, ProfileChanges>({
+    mutationFn: async (changes) => updateMe(changes, await requireToken()),
+    // Not retried: a write that may have succeeded is not a write to repeat
+    // silently. The user can retry, and the screen will show the result.
+    retry: false,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: apiQueryKeys.me });
+    },
+  });
+}
+
+/**
+ * Deletes the account.
+ *
+ * Everything cached is dropped on success, because none of it describes anything
+ * that still exists — the session ends as a consequence, and any screen left
+ * holding a group list would be showing a deleted account's data.
+ */
+export function useDeleteAccount(): UseMutationResult<void, Error, void> {
+  const queryClient = useQueryClient();
+
+  return useMutation<void, Error, void>({
+    mutationFn: async () => deleteAccount(await requireToken()),
+    retry: false,
+    onSuccess: () => {
+      queryClient.clear();
+    },
+  });
+}
+
+/**
+ * The caller's own feed: every event from every group their linked wallet is in.
+ *
+ * Polled, unlike the other index reads, because this is the screen that answers
+ * "did it happen yet" after a member has just signed something. It is also the
+ * one read here whose *empty* answer has two meanings — no linked wallet, or no
+ * activity — so the screen reads `GET /me` alongside it to say which.
+ */
+export function useMyActivity(enabled = true) {
+  return useInfiniteQuery({
+    queryKey: apiQueryKeys.myActivity,
+    enabled,
+    initialPageParam: 0,
+    queryFn: async ({ pageParam, signal }) =>
+      listMyActivity({ limit: LEDGER_PAGE_SIZE, offset: pageParam }, await requireToken(), signal),
+    getNextPageParam: (lastPage) =>
+      lastPage.hasMore ? lastPage.offset + lastPage.limit : undefined,
+    retry: retryRead,
+    refetchInterval: INDEX_STALE_TIME_MS,
+  });
+}
+
+/**
+ * Notifications, newest first.
+ *
+ * Polled on the same interval as the feed, because a notification exists to say
+ * that something the feed shows has happened, and the two arriving together is
+ * what makes the badge and the list agree.
+ */
+export function useNotifications(unreadOnly = false) {
+  return useInfiniteQuery({
+    queryKey: apiQueryKeys.notifications(unreadOnly),
+    initialPageParam: 0,
+    queryFn: async ({ pageParam, signal }) =>
+      listNotifications(
+        { unreadOnly, limit: PAGE_SIZE, offset: pageParam },
+        await requireToken(),
+        signal,
+      ),
+    getNextPageParam: (lastPage) =>
+      lastPage.hasMore ? lastPage.offset + lastPage.limit : undefined,
+    retry: retryRead,
+    refetchInterval: INDEX_STALE_TIME_MS,
+  });
+}
+
+/** Marks one notification read, and refreshes the lists that show its state. */
+export function useMarkNotificationRead(): UseMutationResult<void, Error, { id: string }> {
+  const queryClient = useQueryClient();
+
+  return useMutation<void, Error, { id: string }>({
+    mutationFn: async ({ id }) => markNotificationRead(id, await requireToken()),
+    // Marking twice is safe at the API, so this is one of the few writes that
+    // could be retried — but a retry here would only delay the click's feedback.
+    retry: false,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: apiQueryKeys.allNotifications });
+    },
+  });
+}
+
+/**
+ * Links a wallet to the account.
+ *
+ * The signing is supplied by the caller rather than imported, so this layer does
+ * not depend on a wallet adapter — and so the whole flow can be exercised without
+ * a browser extension. The three steps are one mutation because they are one
+ * intention: a caller cannot usefully hold a nonce and not use it.
+ *
+ * Not retried, and the reason is the nonce: it is single-use and spent before the
+ * binding is written, so a retry after a failure would be refused as a reuse. The
+ * caller starts again, which is cheap.
+ */
+export function useLinkWallet(): UseMutationResult<
+  LinkedWallet,
+  Error,
+  { address: string; signMessage(message: string): Promise<string> }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    LinkedWallet,
+    Error,
+    { address: string; signMessage(message: string): Promise<string> }
+  >({
+    mutationFn: async ({ address, signMessage }) => {
+      const token = await requireToken();
+      const issued = await requestWalletNonce(address, token);
+      const signature = await signMessage(issued.message);
+      return verifyWalletLink({ address, nonce: issued.nonce, signature }, token);
+    },
+    retry: false,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: apiQueryKeys.me });
+    },
   });
 }
 

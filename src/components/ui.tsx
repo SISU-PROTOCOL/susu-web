@@ -14,7 +14,7 @@ import type {
  * inferred from a colour prop.
  */
 
-type ButtonVariant = 'primary' | 'secondary' | 'ghost';
+type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 
 const BUTTON_STYLES: Record<ButtonVariant, string> = {
   primary:
@@ -23,6 +23,11 @@ const BUTTON_STYLES: Record<ButtonVariant, string> = {
     'border border-neutral-300 hover:bg-neutral-100 disabled:text-neutral-400 dark:border-neutral-700 dark:hover:bg-neutral-800',
   ghost:
     'text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100',
+  // For actions that destroy something. The colour is the only thing separating
+  // it from a primary button, which is why it is used sparingly: an action that
+  // cannot be undone should not look like one that can.
+  danger:
+    'border border-red-300 text-red-700 hover:bg-red-50 disabled:text-red-300 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950 dark:disabled:text-red-900',
 };
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
