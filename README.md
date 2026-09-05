@@ -170,6 +170,7 @@ pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
+pnpm audit --audit-level high
 ```
 
 ## Configuration
@@ -184,6 +185,17 @@ server-side credential — including an `anon` variable that actually contains a
 
 This app is unaudited. See [`SECURITY.md`](SECURITY.md) for reporting. Never place
 credentials in this repository, and never commit a populated `.env`.
+
+CI runs `pnpm audit --audit-level high` before lint and test, so a known-vulnerable
+dependency fails the build rather than being discovered later. The threshold is high and
+critical — the severities with a real exploit path — because failing every push on a moderate
+advisory in a build-time tool is how a gate becomes something people re-run without reading.
+The gate can go red without anyone changing this repository, since the advisory database is
+amended continuously; that is intended, and the next push is held until somebody looks.
+
+Dependabot raises the updating pull requests, grouped so a week of patch bumps is one review
+while a major bump stands on its own. It runs weekly; neither mechanism substitutes for the
+other, since the audit reports and only a version change fixes.
 
 ## License
 

@@ -48,6 +48,24 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Fails the build on a known advisory in any dependency, direct or
+      # transitive. It is here, before the slow steps, because a vulnerable
+      # dependency is worth discovering in seconds rather than after a full test
+      # run — and because a gate that runs late is one people learn to ignore.
+      #
+      # `--audit-level high` is the threshold rather than the default of `low`.
+      # Low and moderate advisories in this tree have so far been confined to
+      # build-time tooling that is never shipped and never serves traffic; failing
+      # every push on those trains people to re-run CI without reading it, which
+      # is worse than not having the gate. High and critical are the severities
+      # with a real exploit path, and a failure there should stop a merge.
+      #
+      # This gate can go red without anyone changing this repository, because the
+      # advisory database is amended continuously. That is the intended
+      # behaviour: it means the next push is held until somebody looks.
+      - name: Dependency audit
+        run: pnpm audit --audit-level high
+
       - name: Format check
         run: pnpm format:check
 
