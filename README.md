@@ -4,16 +4,18 @@
 
 [![CI](https://github.com/susu-labs/susu-web/actions/workflows/ci.yml/badge.svg)](https://github.com/susu-labs/susu-web/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Status: Testnet beta](https://img.shields.io/badge/status-testnet%20beta-orange.svg)](#project-status)
-[![Audit: not yet reviewed](https://img.shields.io/badge/audit-not%20yet%20reviewed-critical.svg)](#security)
+[![Status: Testnet · reviewed](https://img.shields.io/badge/status-testnet%20%C2%B7%20reviewed-orange.svg)](#project-status)
+[![Mainnet: readiness implemented · deployment gated](https://img.shields.io/badge/mainnet-readiness%20implemented%20%C2%B7%20deployment%20gated-yellow.svg)](#project-status)
 
 The web client for **Susu Protocol** — a non-custodial rotating savings protocol on Stellar.
 
 It is a client in the strict sense: it builds transactions, asks a wallet to sign them, submits
 them, and then reports what the chain actually did. **It cannot move money.**
 
-> **This code is unaudited and not mainnet-ready.** It talks to Stellar Testnet, where the
-> balances are worthless. Read [Project status](#project-status) before you read anything else.
+> **Reviewed by the maintainer, and not independently audited.** It talks to Stellar Testnet,
+> where the balances are worthless. Mainnet readiness is implemented and mechanically verified, but
+> deployment is deliberately gated until the attestations are satisfied. Read
+> [Project status](#project-status) before you read anything else.
 
 ---
 
@@ -33,7 +35,7 @@ not of good intentions.
 
 ## Project status
 
-**Testnet beta. Not audited. Not mainnet-ready.**
+**Testnet. Reviewed by the maintainer. Mainnet readiness implemented — deployment gated on attestations.**
 
 All twelve planned build phases are implemented: accounts and sessions, the Soroban RPC client,
 the chain-result layer, the Freighter wallet adapter, the typed Factory/Group contract clients,
@@ -44,12 +46,12 @@ deployed Testnet contracts.
 This client is **not hosted anywhere** — there is no deployment configuration in this repository.
 The contracts and the indexer are the parts that are live; this is run locally against them.
 
-Two things stand between this and mainnet. Neither of them is code:
+Two gates stand between this and Mainnet. The machinery for both is written; neither is satisfied:
 
 | Gate | State |
 | --- | --- |
-| **Independent security review** | **Not commissioned.** What a reviewer needs is in [`susu-contracts/docs/AUDIT_SCOPE.md`](https://github.com/susu-labs/susu-contracts/blob/main/docs/AUDIT_SCOPE.md), and the code to review is frozen at the annotated `audit-freeze-1` tag. |
-| **Mainnet readiness** | **Implemented, and currently `NO-GO` — by design.** See [`susu-contracts/docs/MAINNET_READINESS.md`](https://github.com/susu-labs/susu-contracts/blob/main/docs/MAINNET_READINESS.md). |
+| **Independent security review** | **Not commissioned. The maintainer has reviewed this code, which is a different claim.** What a reviewer needs is in [`susu-contracts/docs/AUDIT_SCOPE.md`](https://github.com/susu-labs/susu-contracts/blob/main/docs/AUDIT_SCOPE.md), and the code to review is frozen at the annotated `audit-freeze-1` tag. |
+| **Mainnet readiness** | **Implemented and mechanically verified; `NO-GO` until the attestations are satisfied.** See [`susu-contracts/docs/MAINNET_READINESS.md`](https://github.com/susu-labs/susu-contracts/blob/main/docs/MAINNET_READINESS.md). |
 
 Writes to Mainnet are refused in code, and the app will not start configured for Mainnet without
 an explicit acknowledgement — see `src/lib/stellar/network.ts`.
@@ -291,8 +293,9 @@ confirmed needs maintainer review first. Open an issue before a pull request.
 
 ## Security
 
-This app is unaudited. See [`SECURITY.md`](SECURITY.md) for reporting. Never place
-credentials in this repository, and never commit a populated `.env`.
+This app has been reviewed by the maintainer, not by an independent auditor. See
+[`SECURITY.md`](SECURITY.md) for reporting. Never place credentials in this repository, and never
+commit a populated `.env`.
 
 CI runs `pnpm audit --audit-level high` before lint and test, so a known-vulnerable
 dependency fails the build rather than being discovered later. The threshold is high and
