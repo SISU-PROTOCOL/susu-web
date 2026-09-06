@@ -7,6 +7,11 @@ targets Stellar **Testnet only**. Do not use it with real funds.
 
 We do not claim this software is secure, audited, or production-ready.
 
+Preparing for an independent review, the threats specific to this component — including the ones we
+believe are weakest — are written up in
+[`susu-contracts/docs/AUDIT_SCOPE.md`](https://github.com/SISU-PROTOCOL/susu-contracts/blob/main/docs/AUDIT_SCOPE.md).
+Read it before reporting something already known.
+
 ## Reporting a vulnerability
 
 Please **do not** open a public issue for security problems.

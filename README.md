@@ -4,13 +4,14 @@
 
 The Susu Protocol web client — a non-custodial rotating savings protocol on Stellar.
 
-> **Status: Phase 4 — accounts and sessions.** Supabase Auth, the session provider, the
-> protected application shell and the four authentication screens are implemented and
-> tested. The `profiles` table and its row-level security live in `susu-api`. Earlier
-> phases remain: the Soroban RPC client, the chain-result layer, the Freighter wallet
-> adapter, the typed Factory/Group contract clients, and the
-> create/join/start/contribute/payout screens. The flow has been exercised against the
-> deployed Testnet contracts. Nothing here is audited or production-ready.
+> **Status: feature complete on Testnet, unaudited.** Accounts and sessions, the Soroban RPC
+> client, the chain-result layer, the Freighter wallet adapter, the typed Factory/Group contract
+> clients, the create/join/start/contribute/payout screens, the group and activity dashboards,
+> settings, and the public landing page are all implemented and tested, and the flow has been
+> exercised end-to-end against the deployed Testnet contracts. An independent security review has
+> not happened; the material prepared for it is in
+> [`susu-contracts/docs/AUDIT_SCOPE.md`](https://github.com/SISU-PROTOCOL/susu-contracts/blob/main/docs/AUDIT_SCOPE.md).
+> Nothing here is audited or production-ready, and writes to Mainnet are refused in code.
 
 ## What Susu is
 
