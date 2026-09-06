@@ -1,0 +1,46 @@
+# The build context for the multi-stage Dockerfile at the repository root.
+#
+# The list is short on purpose. Anything excluded here cannot reach the builder,
+# and anything that reaches the *builder* still cannot reach the runtime image,
+# which copies only `dist/` and the nginx fragments. The entries below are the
+# ones that would either break the build or bloat every layer.
+
+# Installed dependencies. The builder reinstalls them from pnpm-lock.yaml, and a
+# host's `node_modules` copied in would be the wrong platform's binaries (this
+# repository is developed on macOS) and would silently defeat the point of
+# `--frozen-lockfile`.
+node_modules
+.pnpm-store
+
+# Build output. Built inside the image; a stale `dist/` copied in alongside it
+# could be what the runtime stage ends up serving.
+dist
+storybook-static
+
+# Test output
+coverage
+
+# Environment files. The browser-visible Supabase values arrive as build
+# arguments (see the Dockerfile); a `.env` copied in would shadow them, and a
+# populated one would put real values into a layer.
+.env
+.env.*
+
+# Git metadata: not needed to build, and it changes on every commit for no
+# benefit. Husky is disabled during the image install for the same reason.
+.git
+.gitignore
+
+# CI configuration is not part of the artefact.
+.github
+
+# A design reference kept at the repository root. It is not part of this app,
+# is not built or shipped, and is not imported by anything — it is here to be
+# read. No reason to copy it into a build context.
+source.tsx
+
+# Editor and OS noise
+.DS_Store
+.idea
+.vscode
+*.log
