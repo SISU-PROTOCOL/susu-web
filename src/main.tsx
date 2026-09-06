@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Router } from './routes/router';
 import { AuthProvider } from './components/AuthProvider';
 import { WalletProvider } from './components/WalletProvider';
+import { MotionProvider } from './components/motion';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -33,7 +34,13 @@ createRoot(container).render(
               outside the authenticated shell — an invite link, for instance —
               can connect without an account. */}
         <WalletProvider>
-          <Router />
+          {/* Motion is configured once, here. It is provided inside the others
+                so that a route transition animates the content it wraps, and
+                so that a component using `m` is never rendered without the
+                feature set that makes it work. */}
+          <MotionProvider>
+            <Router />
+          </MotionProvider>
         </WalletProvider>
       </AuthProvider>
     </QueryClientProvider>

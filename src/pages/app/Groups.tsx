@@ -4,6 +4,8 @@ import { useIndexedGroups } from '@/lib/api/hooks';
 import { apiErrorMessage } from '@/lib/api/errors';
 import { useGroupCount } from '@/lib/susu/hooks';
 import { IndexedGroupCard } from '@/components/IndexedGroupCard';
+import { buttonClasses } from '@/components/button-styles';
+import { Stagger, StaggerItem } from '@/components/motion';
 import { Button, Card, Field, Notice, Page, PageHeader, Spinner } from '@/components/ui';
 import { WalletButton } from '@/components/WalletButton';
 
@@ -58,10 +60,11 @@ export function Groups() {
         actions={
           <span className="flex items-center gap-2">
             <WalletButton />
-            <Link
-              to="/app/groups/create"
-              className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white dark:bg-neutral-100 dark:text-neutral-900"
-            >
+            {/* A real anchor, styled as a button, rather than a button that calls
+                `navigate` — so it can be opened in a new tab and works without
+                JavaScript. It wears the same classes as `Button`, which is the
+                point of those classes being shared. */}
+            <Link to="/app/groups/create" className={buttonClasses('primary')}>
               Create
             </Link>
           </span>
@@ -116,13 +119,13 @@ export function Groups() {
         ) : null}
 
         {items.length === 0 ? null : (
-          <ul className="space-y-3">
+          <Stagger className="space-y-3">
             {items.map((group) => (
-              <li key={group.contractId}>
+              <StaggerItem key={group.contractId}>
                 <IndexedGroupCard group={group} />
-              </li>
+              </StaggerItem>
             ))}
-          </ul>
+          </Stagger>
         )}
 
         {lastPage?.hasMore === true ? (

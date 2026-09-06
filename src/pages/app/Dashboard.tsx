@@ -5,6 +5,7 @@ import { useFactoryConfig, useGroupCount } from '@/lib/susu/hooks';
 import { useStellar } from '@/lib/stellar/hooks';
 import { useWallet } from '@/lib/wallet/context';
 import { IndexedGroupCard } from '@/components/IndexedGroupCard';
+import { Stagger, StaggerItem } from '@/components/motion';
 import { AddressChip, Button, Card, Notice, Page, PageHeader, Spinner } from '@/components/ui';
 import { WalletButton } from '@/components/WalletButton';
 
@@ -96,13 +97,13 @@ function YourGroups() {
       ) : null}
 
       {items.length > 0 ? (
-        <ul className="mt-4 space-y-3">
+        <Stagger className="mt-4 space-y-3">
           {items.map((group) => (
-            <li key={group.contractId}>
+            <StaggerItem key={group.contractId}>
               <IndexedGroupCard group={group} />
-            </li>
+            </StaggerItem>
           ))}
-        </ul>
+        </Stagger>
       ) : null}
 
       {lastPage?.hasMore === true ? (

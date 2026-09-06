@@ -18,8 +18,46 @@ body,
   min-height: 100%;
 }
 
+html {
+  /* Anchor links in the landing page scroll rather than jump. Neutralised below
+     for a reader who has asked for less motion. */
+  scroll-behavior: smooth;
+}
+
+/**
+ * A reader who has asked the operating system for less motion.
+ *
+ * Framer Motion is told the same thing through `MotionConfig`, which drops
+ * transform animations. This covers what that cannot: CSS transitions and
+ * animations declared in classes rather than in JavaScript, and the smooth
+ * scrolling above, which is motion too but has no Framer equivalent. Both halves
+ * are needed because the two kinds of motion are declared in different places.
+ *
+ * The durations are near-zero rather than zero. A `transitionend` listener never
+ * fires for an animation of exactly zero, and code that waits on one would hang.
+ */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 body {
   margin: 0;
+  /* Keep clear of a notch or a rounded edge. `viewport-fit=cover` in index.html
+     lets the background reach the edges of the screen, which also lets content
+     reach them; these insets give it back. `env()` resolves to 0 on any screen
+     without an inset, including every desktop, so this is inert elsewhere. */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
   background-color: var(--susu-surface);
   color: var(--susu-foreground);
   font-family:

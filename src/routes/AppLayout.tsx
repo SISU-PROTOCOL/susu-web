@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { useAuth } from '@/lib/auth/context';
 import { WalletButton } from '@/components/WalletButton';
+import { PageTransition } from '@/components/motion';
 import { Button } from '@/components/ui';
 
 const navItems = [
@@ -22,6 +23,7 @@ const navItems = [
  */
 export function AppLayout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, signOut } = useAuth();
   const [pending, setPending] = useState(false);
 
@@ -78,7 +80,13 @@ export function AppLayout() {
         </nav>
       </header>
       <main>
-        <Outlet />
+        {/* Keyed on the path, so navigating remounts this wrapper and the arriving
+            screen animates in rather than the old one being swapped out beneath
+            it. Without the key React reuses the element and there is nothing to
+            animate — which is the usual reason a route transition does not fire. */}
+        <PageTransition key={location.pathname}>
+          <Outlet />
+        </PageTransition>
       </main>
     </div>
   );

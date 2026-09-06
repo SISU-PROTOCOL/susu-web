@@ -132,6 +132,31 @@ Email confirmation must also be enabled for the signup flow to ask for confirmat
 
 React · Vite · TypeScript · Tailwind CSS v4 · Framer Motion · TanStack Query · React Router · Zod · Stellar SDK · Freighter
 
+## Motion
+
+Animation marks arrival and nothing else: a section entering view, a list filling in, a page
+replacing another. No state is *reported* by movement — a pending transaction, a waiting round
+or an unknown outcome is still stated in words, because a screen reader cannot announce a slide,
+and a member deciding whether their money moved should never have to infer it from one.
+
+Everything lives in `src/components/motion.tsx`. Two rules matter before adding to it:
+
+- **Use `m`, never `motion`.** The app is mounted inside `LazyMotion` with the `domAnimation`
+  feature set, so only the animation features this project uses are shipped. `motion.div`
+  bypasses that and pulls in all of Framer Motion — layout projection, drag, the lot. It costs
+  about 28 kB gzipped, on a bundle that is already large, to animate a fade.
+- **Reduced motion is honoured twice.** `MotionConfig reducedMotion="user"` makes Framer Motion
+  itself drop transforms, and every component also checks `useReducedMotion` and renders its
+  children plainly with no initial state at all. The second check is what covers the fade, since
+  a fade is motion too and would otherwise still start invisible. `index.css` neutralises CSS
+  transitions for the same reader, because those are declared in a different place.
+
+Animated blocks carry `data-reveal`, and `index.html` ships a `<noscript>` rule that un-hides
+them: an element that begins at `opacity: 0` and is animated by script is invisible when the
+script never runs, and a blank page is a worse failure than no animation at all.
+`src/components/motion.test.tsx` asserts that coupling, so the attribute and the rule cannot be
+renamed apart.
+
 ## Routes
 
 | Route | Purpose |
