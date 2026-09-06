@@ -11,15 +11,21 @@ import type { StorybookConfig } from '@storybook/react-vite';
  * the app's real utilities and can import the way the app imports. What is left
  * to configure is three lines long, which is the point.
  *
- * Expected devDependencies:
+ * The three packages this needs are devDependencies of the project and are
+ * pinned to 10.6.0 in `pnpm-lock.yaml`:
  *
- *   pnpm add -D storybook @storybook/react-vite @storybook/addon-a11y
+ *   storybook  @storybook/react-vite  @storybook/addon-a11y
  *
- * They are not in `package.json` in this checkout: the registry was not
- * reachable when this was written, and a dependency list that disagrees with
- * `pnpm-lock.yaml` fails `pnpm install --frozen-lockfile` — which is the first
- * step of both CI and the Dockerfile, and a worse thing to break than a
- * Storybook that has not been started yet.
+ * The major is load-bearing. Storybook 8 cannot be used here: its
+ * `@storybook/builder-vite` resolves `@storybook/react/dist/entry-preview.mjs`,
+ * which no longer exists in the layout Storybook 10 ships, and the build fails
+ * on that import. A local checkout that still had 8.x linked in `node_modules`
+ * failed `pnpm build-storybook` for exactly this reason while the lockfile
+ * asked for 10.6.0 — so if this build breaks after a `storybook@8` was
+ * installed by hand, run `pnpm install` to relink before debugging the config.
+ *
+ * `pnpm build-storybook` runs in CI for the same reason: a catalogue that is
+ * never built is a catalogue that quietly stops working.
  */
 const config: StorybookConfig = {
   // In `stories/` rather than beside the components, so that the app's source

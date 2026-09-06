@@ -81,6 +81,13 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # The catalogue is a dependency of nothing, which is exactly why it rots
+      # without anyone noticing: nothing downstream of it fails when it stops
+      # building. Running it here is what keeps a Storybook major drifting out
+      # of step with Vite from going unseen.
+      - name: Build Storybook
+        run: pnpm build-storybook
+
       - name: Secret scan (gitleaks)
         run: |
           set -euo pipefail
