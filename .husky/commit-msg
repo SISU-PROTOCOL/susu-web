@@ -1,0 +1,33 @@
+#!/usr/bin/env sh
+# Strip the "Co-authored-by: Cursor" trailer that this development environment
+# injects into commit messages.
+#
+# A NOTE ON WHY THIS IS TRACKED, where the same code used to live in
+# `.git/hooks/commit-msg` as a local-only file.
+#
+# Husky points `core.hooksPath` at `.husky/_`, and git then reads hooks from
+# there and nowhere else. That silently disables anything left in `.git/hooks/`
+# — including the local hook this was copied from, which would have gone on
+# looking installed while never running again. So the behaviour moves here, into
+# version control, where it is visible, reviewable, and testable by anyone who
+# commits. The two must not be maintained in parallel; this one is the copy that
+# runs.
+#
+# Anyone committing from an environment that does not add the trailer is
+# unaffected: there is nothing to strip and the `perl` substitution is a no-op.
+# The project deliberately does not want that attribution on its commits.
+#
+# $1 is the path to the message file git has already written and will use as-is
+# once this hook exits, so rewriting it means the trailer never reaches the
+# commit object — whichever code path produced the message: `git commit -m`,
+# `git commit -F`, an editor, or a tool driving git on the user's behalf.
+#
+# Only that one trailer is removed. `Co-authored-by: dependabot` and every other
+# trailer is left untouched.
+
+msg_file="$1"
+
+perl -0777 -i -pe '
+  s/^Co-authored-by: Cursor <cursoragent\@cursor\.com>\r?\n//mg;
+  s/\n+\z/\n/;
+' "$msg_file"

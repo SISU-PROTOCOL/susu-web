@@ -5,6 +5,9 @@ node_modules/
 # Build output
 dist/
 dist-ssr/
+# Storybook's static build (`pnpm build-storybook`). Generated output, never
+# served by the app and never imported by it, so it is not committed.
+storybook-static/
 *.local
 
 # Test output

@@ -1,0 +1,12 @@
+#!/usr/bin/env sh
+# Runs the staged-file linters before a commit is created.
+#
+# Only the files in this commit are checked, never the whole tree: a full
+# `eslint .` on every commit is slow enough that people start committing with
+# `--no-verify`, and a gate that is routinely bypassed protects nothing. The
+# whole tree is still checked in CI, which is what the argument above cannot
+# excuse skipping.
+#
+# `pnpm exec` rather than a bare `lint-staged` so the local binary is used even
+# if a global one exists.
+pnpm exec lint-staged
