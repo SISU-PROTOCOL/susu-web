@@ -6,6 +6,7 @@ import type { MemberActivityRecord } from '@/lib/api/me';
 import type { Notification } from '@/lib/api/notifications';
 import { formatBaseUnits } from '@/lib/susu/amounts';
 import { describeEvent } from '@/lib/susu/events';
+import { Stagger, StaggerItem } from '@/components/motion';
 import { AddressChip, Button, Card, Notice, Page, PageHeader, Spinner } from '@/components/ui';
 
 /**
@@ -47,7 +48,7 @@ function NotificationRow({
   const when = formatWhen(notification.createdAt);
 
   return (
-    <li className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+    <StaggerItem className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
       <div className="min-w-0">
         <p className="text-sm">
           {unread ? (
@@ -70,7 +71,7 @@ function NotificationRow({
           Mark read
         </Button>
       ) : null}
-    </li>
+    </StaggerItem>
   );
 }
 
@@ -119,7 +120,7 @@ function NotificationList() {
       ) : null}
 
       {rows.length === 0 ? null : (
-        <ul className="mt-4 space-y-4">
+        <Stagger className="mt-4 space-y-4">
           {rows.map((notification) => (
             <NotificationRow
               key={notification.id}
@@ -128,7 +129,7 @@ function NotificationList() {
               onMarkRead={() => markRead.mutate({ id: notification.id })}
             />
           ))}
-        </ul>
+        </Stagger>
       )}
 
       {notifications.hasNextPage ? (
@@ -158,7 +159,7 @@ function ActivityRow({ record }: { record: MemberActivityRecord }) {
   const event = describeEvent(record.name, record.payload);
 
   return (
-    <li className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
+    <StaggerItem className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
       <span className="flex flex-wrap items-baseline gap-2">
         <span>{event.title}</span>
         {event.address === undefined ? null : <AddressChip value={event.address} />}
@@ -184,7 +185,7 @@ function ActivityRow({ record }: { record: MemberActivityRecord }) {
           tx
         </Link>
       </span>
-    </li>
+    </StaggerItem>
   );
 }
 
@@ -251,11 +252,11 @@ function ChainActivity() {
       ) : null}
 
       {rows.length === 0 ? null : (
-        <ul className="mt-4 space-y-2">
+        <Stagger className="mt-4 space-y-2">
           {rows.map((record) => (
             <ActivityRow key={record.eventIdentity} record={record} />
           ))}
-        </ul>
+        </Stagger>
       )}
 
       {feed.hasNextPage ? (

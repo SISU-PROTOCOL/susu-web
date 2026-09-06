@@ -31,5 +31,9 @@ export const BUTTON_STYLES: Record<ButtonVariant, string> = {
 };
 
 export function buttonClasses(variant: ButtonVariant = 'primary'): string {
-  return `inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed ${BUTTON_STYLES[variant]}`;
+  // `min-h-11` (2.75rem) on phones is a touch target rather than a size choice:
+  // 44px is the smallest comfortable tap, and the natural height of this button
+  // — 36px — is below it. Above `sm` a pointer is doing the aiming and the
+  // tighter height is better, so the minimum drops back to the natural size.
+  return `inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed sm:min-h-9 ${BUTTON_STYLES[variant]}`;
 }

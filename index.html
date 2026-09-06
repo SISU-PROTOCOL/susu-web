@@ -2,13 +2,36 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- `viewport-fit=cover` so the page background can reach the edges of a
+         notched device instead of being letterboxed. The padding that keeps
+         content clear of the notch is the `safe-area-inset` rule on `body` in
+         `src/index.css`; the two only work as a pair. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta
       name="description"
       content="Susu Protocol — non-custodial rotating savings circles on Stellar. Save together, without the trust issues."
     />
     <meta name="color-scheme" content="light dark" />
+    <!-- Matches the page background, so the browser chrome does not flash white
+         before the stylesheet paints. Both values are the ones `index.css` sets. -->
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b0f14" />
     <title>Susu Protocol</title>
+    <noscript>
+      <!--
+        Sections that animate into view begin at `opacity: 0` and are revealed by
+        script. With scripting unavailable they would stay invisible, which would
+        leave the page apparently blank — a worse outcome than no animation. This
+        shows them plainly instead. It must stay in the document rather than in
+        the stylesheet: it is the absence of script that the rule is for.
+      -->
+      <style>
+        [data-reveal] {
+          opacity: 1 !important;
+          transform: none !important;
+        }
+      </style>
+    </noscript>
   </head>
   <body>
     <div id="root"></div>

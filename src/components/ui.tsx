@@ -212,5 +212,8 @@ export function PageHeader({
 }
 
 export function Page({ children }: { children: ReactNode }) {
-  return <section className="mx-auto max-w-3xl px-6 py-10">{children}</section>;
+  // Narrower gutters on a phone: 24px each side of a 375px screen is a tenth of
+  // the width spent on margin. The vertical padding follows for the same reason
+  // — a small screen wants content, not air.
+  return <section className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-10">{children}</section>;
 }
