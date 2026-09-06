@@ -68,6 +68,7 @@ an explicit acknowledgement — see `src/lib/stellar/network.ts`.
 - [Development](#development)
 - [Checks](#checks)
 - [Configuration](#configuration)
+- [Deployment](#deployment)
 - [Contributing](#contributing)
 - [Security](#security)
 - [License](#license)
@@ -283,6 +284,16 @@ frontend environment variables.** `src/lib/env.ts` validates configuration at ru
 refuses to start if it detects a service-role key, secret key, database URL, or other
 server-side credential — including an `anon` variable that actually contains a
 `service_role` token.
+
+## Deployment
+
+[`docs/DEPLOY_RENDER.md`](docs/DEPLOY_RENDER.md) covers hosting this app on Render. The part worth
+reading before you start: every `VITE_` variable is compiled into the bundle at build time, so
+changing one requires a redeploy rather than a restart — and only browser-safe values may appear
+there at all.
+
+The blueprint is [`render.yaml`](render.yaml). It carries the SPA rewrite and the same security
+headers the Docker path sets, so the two deployments serve one directory of files the same way.
 
 ## Contributing
 

@@ -1,0 +1,164 @@
+# Render Blueprint for susu-web.
+#
+# A static site, not a web service: `pnpm build` produces a directory of files
+# and nothing here needs to be running for them to be served. That is worth
+# saying plainly because the app talks to Stellar directly from the browser and
+# to `susu-api` for the read model — there is no server-side component of this
+# repository that could be hosted, and hosting one would not add anything.
+#
+# The response headers below are the ones `docker/security-headers.conf` sets for
+# the Docker path. Two are omitted there and omitted here, for the same reasons;
+# see the note under `headers:`.
+
+services:
+  - type: web
+    name: susu-web
+    runtime: static
+
+    plan: free
+    branch: main
+    autoDeploy: true
+
+    # `corepack enable` so the build uses the pnpm version pinned in
+    # `packageManager` rather than whichever one happens to be on the builder,
+    # and `--frozen-lockfile` so it builds the commit that was pushed rather than
+    # something that merely satisfies the manifest.
+    #
+    # The `tsc --noEmit` in the project's own `build` script is included on
+    # purpose: a type error should fail the deploy, and this is the only place in
+    # the deployment path where anything would be checking.
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build
+
+    # `vite build` writes here. The Docker path serves the same directory from
+    # nginx.
+    staticPublishPath: ./dist
+
+    headers:
+      # `nosniff` matters more here than usual: the bundle's filenames are content
+      # hashes, so a correctly typed response cannot be executed as a script, and
+      # a mis-typed one would be.
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+
+      # The app is reached from an emailed authentication link, and those URLs
+      # carry tokens in the fragment. Sending the full URL to a third party as a
+      # `Referer` would hand them out; the origin is all anyone needs.
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+
+      # Nothing embeds this app, and a wallet flow is worth protecting from being
+      # clicked through inside someone else's frame.
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+
+      # Vite writes every script and stylesheet as `<name>-<content hash>.<ext>`
+      # under `/assets`, so the URL changes whenever the bytes do. That is what
+      # makes `immutable` honest: nothing is ever served from a URL whose
+      # contents have changed.
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+
+      # The one file whose contents change without its URL changing, so the one
+      # file that must never be cached. A browser holding a stale copy keeps
+      # requesting the previous build's asset hashes, which are no longer
+      # deployed.
+      - path: /index.html
+        name: Cache-Control
+        value: no-store
+
+      # Two headers from the nginx configuration are deliberately absent.
+      #
+      # No `Content-Security-Policy`. A useful policy here has to name the
+      # Supabase project origin, the Soroban RPC endpoint and the block explorer,
+      # and has to allow the Freighter extension's injected script. A policy
+      # written without testing those against a real deployment either breaks the
+      # wallet flow or breaks the transaction pipeline, and both failures look
+      # like bugs in this app rather than in its headers.
+      #
+      # No `Cross-Origin-Opener-Policy`. The Freighter adapter talks to the
+      # extension through a window handle, and severing that relationship severs
+      # the wallet.
+
+    routes:
+      # React Router owns the URLs: `/app/groups/123` is a route, not a file on
+      # disk. Without this, a refresh, a deep link, or the link in a confirmation
+      # email returns 404.
+      #
+      # This cannot break the hashed assets. Render serves a resource directly
+      # when one exists at the requested path and only consults these rules when
+      # none does — the same guarantee nginx gets from `try_files $uri`, and the
+      # reason a missing asset still 404s honestly instead of being answered with
+      # `index.html` and reported by the browser as "expected a JavaScript
+      # module, got text/html".
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+    envVars:
+      # Every variable here is compiled into the browser bundle, so every value
+      # is public by construction. That is the reason the contract IDs can be
+      # written down and the Supabase values cannot: not secrecy, but the fact
+      # that these three are already published in `susu-contracts/docs/TESTNET.md`
+      # while the Supabase ones depend on which project is being deployed to.
+      #
+      # `VITE_` variables are read at **build** time, not at runtime. Changing one
+      # requires a redeploy, not a restart — and a browser holding a cached bundle
+      # will keep using the old value until it reloads.
+
+      - key: NODE_VERSION
+        value: '22'
+
+      - key: VITE_STELLAR_NETWORK
+        value: 'testnet'
+      - key: VITE_STELLAR_RPC_URL
+        value: 'https://soroban-testnet.stellar.org'
+      - key: VITE_EXPLORER_BASE_URL
+        value: 'https://stellar.expert/explorer/testnet'
+
+      # Public Testnet contract addresses, from `docs/TESTNET.md`.
+      - key: VITE_FACTORY_CONTRACT_ID
+        value: 'CCC7KAX4V4GJD6FVG6GSYQ4I2D2B3CWEOQMIX6YM4QBGXTA6INCGRUYC'
+      - key: VITE_USDC_CONTRACT_ID
+        value: 'CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA'
+
+      # ---------------------------------------------------------------------
+      # Values Render prompts for once, during creation.
+      # ---------------------------------------------------------------------
+
+      # This app's own public URL, e.g. `https://susu-web.onrender.com`. It cannot
+      # be written down here because it does not exist until the service does,
+      # and Render's blueprint format has no variable interpolation to derive it.
+      #
+      # It is not cosmetic: authentication emails redirect here, so this exact
+      # origin must also be listed in Supabase under Authentication -> URL
+      # Configuration -> Redirect URLs, as `{VITE_APP_URL}/app` and
+      # `{VITE_APP_URL}/reset-password`. If they are not listed, Supabase
+      # substitutes the project's Site URL instead of refusing, so the email
+      # arrives and the link appears broken.
+      - key: VITE_APP_URL
+        sync: false
+
+      - key: VITE_SUPABASE_URL
+        sync: false
+
+      # The anon/publishable key. Public by design and protected by Row Level
+      # Security. It must never be the service-role key.
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
+
+      # The `susu-api` service, including the `/api/v1` prefix: a base URL
+      # without it produces 404s that look like unimplemented routes.
+      #
+      # This one variable is why the two services cannot be wired together in a
+      # single blueprint. Render does not interpolate variables, so the API's
+      # hostname cannot be composed into this value — deploy the API first, then
+      # paste its origin here with `/api/v1` appended.
+      #
+      # The app is optional about this: group state is read straight from the
+      # chain, so only invite codes need the API, and the screens that do say so.
+      - key: VITE_API_BASE_URL
+        sync: false
