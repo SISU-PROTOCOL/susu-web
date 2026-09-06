@@ -26,6 +26,9 @@ import type { WalletAdapter } from '../wallet';
  *     and then waited on. The simulation step is not an optimization — it is
  *     where the contract itself validates the call, so a call that would be
  *     rejected is refused before the user is asked to approve anything.
+ *   - What the wallet hands back is checked against what it was given, because
+ *     a signature proves that a transaction was authorized by the key — not
+ *     that it is the transaction this app built and simulated.
  *
  * A simulation that fails comes back as a decoded contract error, not a thrown
  * exception, because "you already contributed to this round" is a normal answer.
@@ -296,8 +299,89 @@ export async function invokeContract(options: InvokeOptions): Promise<Invocation
     throw new Error('A fee-bump transaction was returned where a plain transaction was expected.');
   }
 
+  assertSignedMatchesBuilt(assembled, signedTransaction);
+
   return submitAndConfirm(server, signedTransaction, {
     network,
     ...(options.poll === undefined ? {} : { poll: options.poll }),
   });
+}
+
+/** Compares two byte arrays without pulling in a dependency or needing a secret. */
+function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  for (let index = 0; index < a.length; index += 1) {
+    if (a[index] !== b[index]) return false;
+  }
+  return true;
+}
+
+/**
+ * Names what a substituted transaction changed, for the error message.
+ *
+ * This exists to make the failure legible, not to be the check — the byte
+ * comparison has already established that the two differ. Only the fields a
+ * person can act on are named; if none of them accounts for the difference, the
+ * change is inside an operation, which is where a substitution would hide.
+ */
+function describeDifference(assembled: Transaction, signed: Transaction): string {
+  const differences: string[] = [];
+
+  if (assembled.source !== signed.source) differences.push('the source account');
+  if (assembled.fee !== signed.fee) differences.push('the fee');
+  if (assembled.sequence !== signed.sequence) differences.push('the sequence number');
+
+  const expectedBounds = assembled.timeBounds;
+  const actualBounds = signed.timeBounds;
+  if (
+    expectedBounds?.minTime !== actualBounds?.minTime ||
+    expectedBounds?.maxTime !== actualBounds?.maxTime
+  ) {
+    differences.push('the time bounds');
+  }
+
+  if (
+    assembled.memo.type !== signed.memo.type ||
+    String(assembled.memo.value ?? '') !== String(signed.memo.value ?? '')
+  ) {
+    differences.push('the memo');
+  }
+
+  const expectedCount = assembled.operations.length;
+  const actualCount = signed.operations.length;
+  if (expectedCount !== actualCount) {
+    differences.push(`the number of operations (${expectedCount} became ${actualCount})`);
+  }
+
+  if (differences.length === 0) return 'an operation or its arguments';
+
+  return differences.join(', ');
+}
+
+/**
+ * Refuses a transaction the wallet returns that is not the one it was handed.
+ *
+ * A wallet is a program in the user's browser that this app does not control,
+ * and XDR goes out as text and comes back as text, so nothing here compels it
+ * to return what it was asked to sign. The signature proves that whatever came
+ * back was authorized by the key; it says nothing about whether that is the
+ * transaction this app simulated and the user was shown.
+ *
+ * `signatureBase()` is exactly the bytes a signer authorizes — the network
+ * identifier, the envelope type, and the transaction body. Comparing it against
+ * the assembled transaction therefore checks everything a wallet could alter,
+ * including every operation and every argument, without this function needing
+ * to know what any of them are.
+ *
+ * This throws rather than returning a contract-style failure. A contract
+ * refusing a call is a normal answer the UI renders; a wallet substituting a
+ * transaction is not a state the app can carry on from, and it must not be
+ * possible to mistake it for one.
+ */
+function assertSignedMatchesBuilt(assembled: Transaction, signed: Transaction): void {
+  if (bytesEqual(assembled.signatureBase(), signed.signatureBase())) return;
+
+  throw new Error(
+    `The wallet returned a different transaction than the one it was asked to sign: ${describeDifference(assembled, signed)}. Nothing was submitted.`,
+  );
 }

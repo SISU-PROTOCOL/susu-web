@@ -5,6 +5,8 @@ import {
   Contract,
   Networks,
   SorobanDataBuilder,
+  Transaction,
+  TransactionBuilder,
   nativeToScVal,
   rpc,
   xdr,
@@ -360,5 +362,108 @@ describe('invokeContract', () => {
 
     // The user was never asked to approve anything.
     expect(wallet.signCalls).toBe(0);
+  });
+
+  it('refuses to submit a transaction the wallet substituted for the one it was given', async () => {
+    // A wallet is a program we do not control, and it returns XDR as text, so
+    // it can return anything it likes. The signature only proves that whatever
+    // came back was authorized by the key — not that it is the transaction this
+    // app simulated and showed the user.
+    let submissions = 0;
+    const server: ContractServer = {
+      ...fakeServer({ simulation: successSimulation(nativeToScVal(1, { type: 'u32' })) }),
+      sendTransaction: () => {
+        submissions += 1;
+        return Promise.resolve({
+          status: 'PENDING',
+          hash: HASH,
+          latestLedger: 100,
+        } as unknown as rpc.Api.SendTransactionResponse);
+      },
+    };
+
+    const wallet: WalletAdapter = {
+      ...fakeWallet(),
+      signTransaction(xdrString: string) {
+        const handed = TransactionBuilder.fromXDR(xdrString, Networks.TESTNET) as Transaction;
+
+        // The same account, fee and sequence, but paying out instead of
+        // contributing: a substitution a user could not tell apart.
+        const substitute = new TransactionBuilder(
+          new Account(handed.source, (BigInt(handed.sequence) - 1n).toString()),
+          { fee: handed.fee, networkPassphrase: Networks.TESTNET },
+        )
+          .addOperation(new Contract(GROUP).call('execute_payout'))
+          .setTimeout(60)
+          .build();
+
+        return Promise.resolve({
+          signedTxXdr: substitute.toXDR(),
+          signerAddress: READ_ONLY_SOURCE,
+        });
+      },
+    };
+
+    await expect(
+      invokeContract({
+        server,
+        network: 'testnet',
+        wallet,
+        sourceAddress: READ_ONLY_SOURCE,
+        contract: groupContract(),
+        method: 'contribute',
+        args: [],
+        poll: NO_WAIT,
+      }),
+    ).rejects.toThrow(/different transaction/i);
+
+    // Nothing reached the network.
+    expect(submissions).toBe(0);
+  });
+
+  it('describes what a substituted transaction changed', async () => {
+    let message = '';
+    const server = fakeServer({ simulation: successSimulation(nativeToScVal(1, { type: 'u32' })) });
+
+    const wallet: WalletAdapter = {
+      ...fakeWallet(),
+      signTransaction(xdrString: string) {
+        const handed = TransactionBuilder.fromXDR(xdrString, Networks.TESTNET) as Transaction;
+
+        // Same account, fee and sequence — only the call itself differs, which
+        // is the substitution the message has to be able to describe.
+        const substitute = new TransactionBuilder(
+          new Account(handed.source, (BigInt(handed.sequence) - 1n).toString()),
+          { fee: handed.fee, networkPassphrase: Networks.TESTNET },
+        )
+          .addOperation(new Contract(GROUP).call('execute_payout'))
+          .setTimeout(60)
+          .build();
+
+        return Promise.resolve({
+          signedTxXdr: substitute.toXDR(),
+          signerAddress: READ_ONLY_SOURCE,
+        });
+      },
+    };
+
+    try {
+      await invokeContract({
+        server,
+        network: 'testnet',
+        wallet,
+        sourceAddress: READ_ONLY_SOURCE,
+        contract: groupContract(),
+        method: 'contribute',
+        args: [],
+        poll: NO_WAIT,
+      });
+    } catch (cause) {
+      message = cause instanceof Error ? cause.message : String(cause);
+    }
+
+    // The call that was substituted is named, rather than the message being a
+    // generic refusal the user cannot act on.
+    expect(message).toMatch(/an operation or its arguments/);
   });
 });
