@@ -1,4 +1,4 @@
-import { type ReactNode, useRef } from 'react';
+import { type CSSProperties, type ReactNode, useRef } from 'react';
 import {
   domAnimation,
   LazyMotion,
@@ -6,6 +6,7 @@ import {
   m,
   useInView,
   useReducedMotion,
+  type MotionStyle,
   type Variants,
 } from 'framer-motion';
 
@@ -86,23 +87,35 @@ export function MotionProvider({ children }: { children: ReactNode }) {
 export function Reveal({
   children,
   className,
+  style,
   delay = 0,
 }: {
   children: ReactNode;
   className?: string;
+  style?: CSSProperties;
   delay?: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: true, margin: '0px 0px -12% 0px' });
   const reduced = useReducedMotion();
 
-  if (reduced === true) return <div className={className}>{children}</div>;
+  if (reduced === true)
+    return (
+      <div className={className} style={style}>
+        {children}
+      </div>
+    );
 
   return (
     <m.div
       ref={ref}
       data-reveal=""
       className={className}
+      // Spread only when present rather than passing `undefined` through:
+      // `exactOptionalPropertyTypes` rejects an explicit `undefined` for an
+      // optional prop, and the custom properties this carries widen
+      // `CSSProperties` past what Framer Motion's `MotionStyle` declares.
+      {...(style === undefined ? {} : { style: style as MotionStyle })}
       initial={{ opacity: 0, y: DISTANCE }}
       animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: DISTANCE }}
       transition={{ duration: DURATION, ease: EASE_OUT, delay }}
@@ -175,5 +188,67 @@ export function StaggerItem({ children, className }: { children: ReactNode; clas
     <m.li data-reveal="" className={className} variants={item}>
       {children}
     </m.li>
+  );
+}
+
+/**
+ * An ambient field of blurred colour, behind a section's content.
+ *
+ * Decoration with no informational content, so it is `aria-hidden` and marked
+ * `pointer-events-none`: it must never intercept a click meant for a link, and a
+ * screen reader has no reason to know it exists.
+ *
+ * It carries no `data-reveal` and no animation, deliberately. It is at rest from
+ * the first paint, so there is nothing to reveal, and `index.html`'s no-script
+ * rule only exists for things that would otherwise be invisible.
+ *
+ * The parent must be `relative` and should be `overflow-hidden`, or the blobs
+ * will widen the page.
+ */
+export function Blobs({
+  className,
+  palette = 'warm',
+}: {
+  className?: string;
+  palette?: 'warm' | 'cool' | 'mixed';
+}) {
+  const [first, second] =
+    palette === 'warm'
+      ? (['blob-amber', 'blob-emerald'] as const)
+      : palette === 'cool'
+        ? (['blob-sky', 'blob-emerald'] as const)
+        : (['blob-amber', 'blob-sky'] as const);
+
+  return (
+    <div aria-hidden="true" className={`pointer-events-none absolute inset-0 ${className ?? ''}`}>
+      <span className={`blob ${first} -top-24 -left-24 size-88`} />
+      <span className={`blob ${second} -right-20 -bottom-32 size-104`} />
+    </div>
+  );
+}
+
+/**
+ * A tilted badge that straightens when its `.settles` ancestor is hovered.
+ *
+ * The angle comes in as `--tilt` rather than as a class per value, so callers
+ * can vary it freely. Like `Blobs` it is at rest immediately and carries no
+ * `data-reveal`.
+ */
+export function Sticker({
+  children,
+  className,
+  tilt = -3,
+}: {
+  children: ReactNode;
+  className?: string;
+  tilt?: number;
+}) {
+  return (
+    <span
+      className={`sticker sticker-settle ${className ?? ''}`}
+      style={{ '--tilt': `${tilt}deg` } as CSSProperties}
+    >
+      {children}
+    </span>
   );
 }

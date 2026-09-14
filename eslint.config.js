@@ -6,7 +6,20 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 
 export default tseslint.config(
   {
-    ignores: ['dist', 'coverage', 'node_modules', '*.config.js'],
+    ignores: [
+      'dist',
+      'coverage',
+      'node_modules',
+      '*.config.js',
+      // A design reference kept at the repository root: a page from another
+      // project, whose motion this one's landing page is adapted from. It is not
+      // part of this app, is not built or shipped, and is not imported by
+      // anything — it is here to be read. Linting it would fail the build over
+      // style choices in code that never runs, so it is excluded rather than
+      // committed, and it should be deleted before this repository is handed to
+      // anyone.
+      'source.tsx',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

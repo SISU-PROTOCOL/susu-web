@@ -71,3 +71,166 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+
+/**
+ * Decorative motion for the landing page.
+ *
+ * A NOTE ON WHAT WAS TAKEN FROM THE REFERENCE, AND WHAT WAS NOT
+ * These are adapted from a marketing page whose visual language is loud:
+ * saturated blobs, tilted stickers, cards fanned like polaroids. The motion was
+ * worth having; the palette and the claims were not, because this page's job is
+ * to describe a protocol honestly rather than to sell one. So: the movement
+ * arrives, the restraint stays.
+ *
+ * One deliberate departure. The reference dims and *blurs* the cards that are
+ * not focused. These cards contain sentences a member is meant to read, and
+ * blurred body text is not a style choice, it is a readability failure — so the
+ * unfocused state is dimmed and desaturated but never blurred.
+ *
+ * All of this is transform/opacity only, so it stays on the compositor and does
+ * not trigger layout. The global `prefers-reduced-motion` rule above neutralises
+ * the durations; the components additionally avoid the overlapping layout
+ * entirely when motion is not wanted, because a fan is harder to read than a
+ * list whatever the transition speed is.
+ */
+
+/* Ambient colour field. Purely decorative, always `aria-hidden`. */
+.blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+.blob-amber {
+  background-color: #f59e0b;
+}
+
+.blob-emerald {
+  background-color: #10b981;
+}
+
+.blob-sky {
+  background-color: #0ea5e9;
+}
+
+/* A tilted badge. The tilt is a custom property so the angle can vary per use
+   without a class for every value. */
+.sticker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transform: rotate(var(--tilt, -3deg));
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* A sticker inside a `.settles` ancestor straightens when that ancestor is
+   hovered or contains focus, which is what makes a numbered step feel like it
+   has been picked up rather than the tiny badge on its own. */
+.settles:hover .sticker-settle,
+.settles:focus-within .sticker-settle {
+  transform: rotate(0deg) scale(1.04);
+}
+
+/* A card that straightens and lifts. Used for the claim cards.
+ *
+ * The tilt uses the individual `rotate` and `translate` properties rather than
+ * `transform`, and that is not a stylistic choice. These cards are wrapped in
+ * `Reveal`, which animates `transform` and writes it as an inline style — an
+ * inline style that would beat this rule and silently discard the tilt. The
+ * individual properties compose with `transform` instead of competing with it,
+ * so both animations survive. */
+.settle {
+  rotate: var(--tilt, 0deg);
+  transition:
+    rotate 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    translate 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.35s ease;
+}
+
+.settle:hover,
+.settle:focus-within {
+  rotate: 0deg;
+  translate: 0 -4px;
+  box-shadow: 0 18px 34px -20px rgb(0 0 0 / 0.45);
+}
+
+/* The accent rule that fills on hover. A pseudo-element, so it is decoration
+   that costs no markup — which matters here because these cards are `dt`/`dd`
+   pairs inside a `dl`, and only those elements belong in that container. */
+.settle::before {
+  content: '';
+  display: block;
+  width: 2.5rem;
+  height: 0.25rem;
+  margin-bottom: 1rem;
+  border-radius: 9999px;
+  background-color: var(--accent, #f59e0b);
+  transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.settle:hover::before,
+.settle:focus-within::before {
+  width: 100%;
+}
+
+/* The fan: cards arranged on an arc, pivotting at their bottom edge. */
+.fan {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  list-style: none;
+  padding: 0;
+}
+
+.fan-card {
+  --fan-rotation: 0deg;
+  --fan-x: 0px;
+  position: absolute;
+  bottom: 0;
+  transform-origin: bottom center;
+  transform: rotate(var(--fan-rotation)) translateX(var(--fan-x)) translateY(0) scale(1);
+  transition:
+    transform 0.6s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.35s ease,
+    filter 0.35s ease;
+}
+
+/* The focused card comes forward. Specificity (0,2,0) beats `.fan-card`, so this
+   wins over the resting transform without needing `!important`. */
+.fan-card[data-active='true'] {
+  transform: rotate(0deg) translateX(0) translateY(-30px) scale(1.06);
+}
+
+/* Dim and desaturate the others — but do not blur them. See the note above. */
+.fan[data-has-active='true'] .fan-card:not([data-active='true']) {
+  opacity: 0.6;
+  filter: grayscale(0.45);
+}
+
+/* Below the fan's usable width the arc stops making sense, so it becomes a
+   column and every card is fully legible at once. The interaction is not merely
+   disabled here — it is unnecessary, because nothing overlaps. */
+@media (max-width: 900px) {
+  .fan {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  .fan-card {
+    position: static;
+    transform: none !important;
+    width: 100% !important;
+  }
+
+  .fan[data-has-active='true'] .fan-card:not([data-active='true']) {
+    opacity: 1;
+    filter: none;
+  }
+}
