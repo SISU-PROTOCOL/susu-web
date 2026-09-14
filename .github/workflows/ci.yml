@@ -30,7 +30,7 @@ jobs:
       VITE_EXPLORER_BASE_URL: https://stellar.expert/explorer/testnet
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           # Full history so the secret scan can see secrets that were committed
           # and later removed.
