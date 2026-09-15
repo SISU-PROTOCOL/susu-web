@@ -179,12 +179,7 @@ export function Landing() {
                 your groups — it cannot move a single unit. Every payment needs a signature from a
                 wallet only you hold.
               </Claim>
-              <Claim
-                title="Everything is checkable"
-                delay={0.15}
-                tilt={-0.9}
-                accent="neutral"
-              >
+              <Claim title="Everything is checkable" delay={0.15} tilt={-0.9} accent="neutral">
                 Groups, contributions, and payouts are events on a public ledger, and the contract
                 that produced them is deployed and verifiable by address. You do not have to take
                 this page's word for any of it.
@@ -309,7 +304,10 @@ function Steps() {
               {
                 '--fan-rotation': `${placement.rotation}deg`,
                 '--fan-x': `${placement.x}px`,
-                zIndex: placement.zIndex,
+                // A custom property, not `zIndex`. An inline `z-index` would beat
+                // the `:hover` and `[data-active]` rules that lift a focused card
+                // above its neighbours, which is the whole point of the fan.
+                '--fan-z': placement.zIndex,
               } as CSSProperties
             }
           >

@@ -190,27 +190,48 @@ body {
   --fan-x: 0px;
   position: absolute;
   bottom: 0;
+  /* The resting stacking order arrives as `--fan-z` rather than as an inline
+     `z-index`, because an inline style wins over every rule in this file — and
+     the focus rules below have to be able to lift a card above its neighbours.
+     A custom property keeps the per-card value while leaving `z-index` itself
+     something CSS can override. */
+  z-index: var(--fan-z, 1);
   transform-origin: bottom center;
   transform: rotate(var(--fan-rotation)) translateX(var(--fan-x)) translateY(0) scale(1);
   transition:
     transform 0.6s cubic-bezier(0.22, 1, 0.36, 1),
+    translate 0.6s cubic-bezier(0.22, 1, 0.36, 1),
     opacity 0.35s ease,
     filter 0.35s ease;
 }
 
-/* Hovering a card lifts it and eases it back toward upright, so the arc responds
-   before anything is clicked. Declared before the active rule below, which has
-   the same specificity — so a focused card keeps its stronger treatment even
-   while the pointer is over it. */
-.fan-card:hover {
-  transform: rotate(calc(var(--fan-rotation) * 0.4)) translateX(var(--fan-x)) translateY(-14px)
-    scale(1.02);
+/* The card the pointer is over, or the one that has been picked, leaves the arc
+   and comes to the middle of it: straightened, unscaled by its slot's offset,
+   and raised above every other card. This is one rule for both states because
+   they are the same gesture — pointing at a card and clicking one should look
+   identical, and the difference is only that the click outlives the pointer. */
+.fan-card:hover,
+.fan-card[data-active='true'] {
+  z-index: 100;
+  transform: rotate(0deg) translateX(0) translateY(-20px) scale(1.08);
 }
 
-/* The focused card comes forward. Specificity (0,2,0) beats `.fan-card`, so this
-   wins over the resting transform without needing `!important`. */
+/* A picked card sits a little higher still. The extra lift uses the individual
+   `translate` property, which composes with `transform` instead of competing
+   with it — so this adds to the shared focus transform above rather than
+   silently replacing it. */
 .fan-card[data-active='true'] {
-  transform: rotate(0deg) translateX(0) translateY(-30px) scale(1.06);
+  translate: 0 -12px;
+}
+
+/* Everything that is not the focus recedes — dimmed and desaturated, but never
+   blurred: these cards hold sentences a member is meant to read. Both selectors
+   exclude whatever is hovered, so the card under the pointer is always the one
+   left fully legible. */
+.fan:has(.fan-card:hover) .fan-card:not(:hover),
+.fan[data-has-active='true'] .fan-card:not([data-active='true']):not(:hover) {
+  opacity: 0.55;
+  filter: grayscale(0.45);
 }
 
 /* The card face. */
@@ -330,10 +351,15 @@ body {
   .fan-card {
     position: static;
     transform: none !important;
+    translate: none !important;
+    z-index: auto;
     width: 100% !important;
   }
 
-  .fan[data-has-active='true'] .fan-card:not([data-active='true']) {
+  /* Nothing overlaps here, so nothing should recede either — including the
+     `:has(:hover)` rule, which a touch device would otherwise trigger on tap. */
+  .fan:has(.fan-card:hover) .fan-card:not(:hover),
+  .fan[data-has-active='true'] .fan-card:not([data-active='true']):not(:hover) {
     opacity: 1;
     filter: none;
   }
