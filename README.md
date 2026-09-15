@@ -1,17 +1,72 @@
 # Susu Protocol — Web Client
 
 [![CI](https://github.com/susu-labs/susu-web/actions/workflows/ci.yml/badge.svg)](https://github.com/susu-labs/susu-web/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Status: Testnet beta](https://img.shields.io/badge/status-testnet%20beta-orange.svg)](#project-status)
+[![Audit: not yet reviewed](https://img.shields.io/badge/audit-not%20yet%20reviewed-critical.svg)](#security)
 
-The Susu Protocol web client — a non-custodial rotating savings protocol on Stellar.
+The web client for **Susu Protocol** — a non-custodial rotating savings protocol on Stellar.
 
-> **Status: feature complete on Testnet, unaudited.** Accounts and sessions, the Soroban RPC
-> client, the chain-result layer, the Freighter wallet adapter, the typed Factory/Group contract
-> clients, the create/join/start/contribute/payout screens, the group and activity dashboards,
-> settings, and the public landing page are all implemented and tested, and the flow has been
-> exercised end-to-end against the deployed Testnet contracts. An independent security review has
-> not happened; the material prepared for it is in
-> [`susu-contracts/docs/AUDIT_SCOPE.md`](https://github.com/susu-labs/susu-contracts/blob/main/docs/AUDIT_SCOPE.md).
-> Nothing here is audited or production-ready, and writes to Mainnet are refused in code.
+It is a client in the strict sense: it builds transactions, asks a wallet to sign them, submits
+them, and then reports what the chain actually did. **It cannot move money.**
+
+> **This code is unaudited and not mainnet-ready.** It talks to Stellar Testnet, where the
+> balances are worthless. Read [Project status](#project-status) before you read anything else.
+
+---
+
+## The system
+
+Susu is four repositories. This one is what a member sees.
+
+| Repository | Responsibility | Runs on |
+| --- | --- | --- |
+| [`susu-contracts`](https://github.com/susu-labs/susu-contracts) | Soroban contracts. The financial authority. | **Testnet** |
+| [`susu-indexer`](https://github.com/susu-labs/susu-indexer) | Reads chain events, records them in Postgres on a schedule. | **Testnet** (Supabase Cron) |
+| [`susu-api`](https://github.com/susu-labs/susu-api) | Read model, accounts, invites, notifications, transaction preparation. | Local |
+| **`susu-web`** *(you are here)* | The client. | Local |
+
+Closing this repository changes nothing about anyone's money. That is a property of the design,
+not of good intentions.
+
+## Project status
+
+**Testnet beta. Not audited. Not mainnet-ready.**
+
+All twelve planned build phases are implemented: accounts and sessions, the Soroban RPC client,
+the chain-result layer, the Freighter wallet adapter, the typed Factory/Group contract clients,
+the create / join / start / contribute / payout screens, the group and activity dashboards,
+settings, and the public landing page. The flow has been exercised end-to-end against the
+deployed Testnet contracts.
+
+This client is **not hosted anywhere** — there is no deployment configuration in this repository.
+The contracts and the indexer are the parts that are live; this is run locally against them.
+
+Two things stand between this and mainnet. Neither of them is code:
+
+| Gate | State |
+| --- | --- |
+| **Independent security review** | **Not commissioned.** What a reviewer needs is in [`susu-contracts/docs/AUDIT_SCOPE.md`](https://github.com/susu-labs/susu-contracts/blob/main/docs/AUDIT_SCOPE.md), and the code to review is frozen at the annotated `audit-freeze-1` tag. |
+| **Mainnet readiness** | **Implemented, and currently `NO-GO` — by design.** See [`susu-contracts/docs/MAINNET_READINESS.md`](https://github.com/susu-labs/susu-contracts/blob/main/docs/MAINNET_READINESS.md). |
+
+Writes to Mainnet are refused in code, and the app will not start configured for Mainnet without
+an explicit acknowledgement — see `src/lib/stellar/network.ts`.
+
+## Contents
+
+- [What Susu is](#what-susu-is)
+- [This app is not a custodian](#this-app-is-not-a-custodian)
+- [Chain access and wallets](#chain-access-and-wallets)
+- [Accounts and sessions](#accounts-and-sessions)
+- [Stack](#stack)
+- [Motion](#motion)
+- [Routes](#routes)
+- [Development](#development)
+- [Checks](#checks)
+- [Configuration](#configuration)
+- [Contributing](#contributing)
+- [Security](#security)
+- [License](#license)
 
 ## What Susu is
 
@@ -30,7 +85,7 @@ signature is never treated as success — only chain confirmation is.
 ## Chain access and wallets
 
 | Module | Responsibility |
-|---|---|
+| --- | --- |
 | `src/lib/stellar/network.ts` | Derives the network, RPC URL and passphrase from validated config. Refuses an RPC endpoint that contradicts the configured network, and refuses mainnet writes. |
 | `src/lib/stellar/client.ts` | Lazily constructed Soroban RPC server and contract handles for the Factory and the USDC SAC. |
 | `src/lib/stellar/result.ts` | Interprets what the chain actually said. Owns the rule that a submission is not a result. |
@@ -70,13 +125,29 @@ The Freighter adapter also rejects two responses that would otherwise look like
 signatures: an envelope returned unchanged, and a signature produced by a different
 account than the one requested (which usually means the active account was switched).
 
+### The wallet is not trusted to return what it was given
+
+A wallet sees the transaction it is asked to sign, and hands back a signed envelope. Nothing
+in the protocol forces those to be the same transaction, and a compromised or malicious wallet
+could return a signature over something else entirely.
+
+So after signing, `invoke.ts` compares the bytes each transaction authorizes —
+`signatureBase()` on both — and refuses to submit if they differ, reporting what changed:
+a destination, a different amount, a different operation. Nothing reaches the network.
+
+This is a check against a compromised wallet, not against a compromised page. A page running
+attacker-controlled JavaScript can do whatever it likes regardless; the point is that the
+*wallet* is not given the benefit of the doubt. What is still missing is an in-app transaction
+preview, so today the wallet remains the only place a member can see what they are about to
+authorize. That is recorded as a known weakness rather than papered over.
+
 ## Accounts and sessions
 
 Credentials are handled entirely by Supabase Auth. This app never sees or stores a
 password, and no password is ever written to a table it owns.
 
 | Module | Responsibility |
-|---|---|
+| --- | --- |
 | `src/lib/auth/actions.ts` | Signup, sign-in, sign-out, password reset and confirmation resend. Every one returns a result rather than throwing, so no page can leave a button apparently doing nothing. |
 | `src/lib/auth/errors.ts` | Translates provider failures into codes the UI branches on, and reads the failures the provider reports in the URL rather than in a response. |
 | `src/lib/auth/validation.ts` | Field-level feedback. Not a security control — Supabase's project settings are the authority and re-check every rule. |
@@ -161,7 +232,7 @@ renamed apart.
 ## Routes
 
 | Route | Purpose |
-|---|---|
+| --- | --- |
 | `/` | Landing |
 | `/login`, `/signup` | Authentication |
 | `/forgot-password`, `/reset-password` | Password recovery |
@@ -190,13 +261,15 @@ pnpm dev
 
 ## Checks
 
+CI runs all of these, in this order, and a failure at any step stops the run:
+
 ```bash
+pnpm audit --audit-level high
 pnpm format:check
 pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
-pnpm audit --audit-level high
 ```
 
 ## Configuration
@@ -206,6 +279,13 @@ frontend environment variables.** `src/lib/env.ts` validates configuration at ru
 refuses to start if it detects a service-role key, secret key, database URL, or other
 server-side credential — including an `anon` variable that actually contains a
 `service_role` token.
+
+## Contributing
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) and the [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md).
+
+Anything that changes how money appears, what a user is asked to sign, or what is reported as
+confirmed needs maintainer review first. Open an issue before a pull request.
 
 ## Security
 
