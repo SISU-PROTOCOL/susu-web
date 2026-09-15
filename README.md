@@ -1,6 +1,6 @@
 # Susu Protocol — Web Client
 
-[![CI](https://github.com/SISU-PROTOCOL/susu-web/actions/workflows/ci.yml/badge.svg)](https://github.com/SISU-PROTOCOL/susu-web/actions/workflows/ci.yml)
+[![CI](https://github.com/susu-labs/susu-web/actions/workflows/ci.yml/badge.svg)](https://github.com/susu-labs/susu-web/actions/workflows/ci.yml)
 
 The Susu Protocol web client — a non-custodial rotating savings protocol on Stellar.
 
@@ -10,7 +10,7 @@ The Susu Protocol web client — a non-custodial rotating savings protocol on St
 > settings, and the public landing page are all implemented and tested, and the flow has been
 > exercised end-to-end against the deployed Testnet contracts. An independent security review has
 > not happened; the material prepared for it is in
-> [`susu-contracts/docs/AUDIT_SCOPE.md`](https://github.com/SISU-PROTOCOL/susu-contracts/blob/main/docs/AUDIT_SCOPE.md).
+> [`susu-contracts/docs/AUDIT_SCOPE.md`](https://github.com/susu-labs/susu-contracts/blob/main/docs/AUDIT_SCOPE.md).
 > Nothing here is audited or production-ready, and writes to Mainnet are refused in code.
 
 ## What Susu is
