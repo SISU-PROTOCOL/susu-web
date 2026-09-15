@@ -166,7 +166,7 @@ body {
   height: 0.25rem;
   margin-bottom: 1rem;
   border-radius: 9999px;
-  background-color: var(--accent, #f59e0b);
+  background-color: rgb(var(--accent, 245 158 11));
   transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -198,10 +198,114 @@ body {
     filter 0.35s ease;
 }
 
+/* Hovering a card lifts it and eases it back toward upright, so the arc responds
+   before anything is clicked. Declared before the active rule below, which has
+   the same specificity — so a focused card keeps its stronger treatment even
+   while the pointer is over it. */
+.fan-card:hover {
+  transform: rotate(calc(var(--fan-rotation) * 0.4)) translateX(var(--fan-x)) translateY(-14px)
+    scale(1.02);
+}
+
 /* The focused card comes forward. Specificity (0,2,0) beats `.fan-card`, so this
    wins over the resting transform without needing `!important`. */
 .fan-card[data-active='true'] {
   transform: rotate(0deg) translateX(0) translateY(-30px) scale(1.06);
+}
+
+/* The card face. */
+/* Each card carries its own hue in `--accent` as a bare RGB triplet, so one
+   value drives every coloured thing on it: the tint across the top, the rule,
+   the numeral, the badge and the glow. Passing a triplet rather than a colour
+   is what lets the translucent variants below stay one expression instead of
+   three hard-coded rgba values per step. */
+.step-card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  border-radius: 1.25rem;
+  border: 1px solid rgb(var(--accent) / 0.3);
+  padding: 1.5rem;
+  background:
+    linear-gradient(to bottom, rgb(var(--accent) / 0.16), rgb(var(--accent) / 0) 46%),
+    var(--susu-surface);
+  box-shadow: 0 18px 34px -28px rgb(0 0 0 / 0.6);
+  transition:
+    border-color 0.35s ease,
+    box-shadow 0.35s ease;
+}
+
+@media (prefers-color-scheme: dark) {
+  .step-card {
+    /* A slightly lifted surface rather than `--susu-surface`, which is the page
+       background: in dark mode the card would otherwise be invisible except for
+       its border. */
+    background:
+      linear-gradient(to bottom, rgb(var(--accent) / 0.22), rgb(var(--accent) / 0) 52%), #17181c;
+  }
+}
+
+/* The rule across the top, which sweeps out to full width on hover. Always
+   partly visible, so the accent reads as structure rather than only as a
+   reaction to the pointer. */
+.step-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 0.25rem;
+  background: linear-gradient(to right, rgb(var(--accent)), rgb(var(--accent) / 0.2));
+  transform: scaleX(0.4);
+  transform-origin: left;
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* A large watermark numeral, cropped by the card's `overflow: hidden` so it
+   reads as texture rather than as a second label competing with the badge. It
+   sits behind the content, which is why the content is `relative z-10`. */
+.step-card__numeral {
+  position: absolute;
+  top: -2.25rem;
+  right: -0.75rem;
+  font-size: 8rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: rgb(var(--accent) / 0.16);
+  user-select: none;
+  pointer-events: none;
+}
+
+.step-card__badge {
+  background-color: rgb(var(--accent));
+  /* Near-black on every one of these hues: they are all mid-tone enough that
+     white would fail contrast against them, including the amber. */
+  color: #111111;
+  border-color: rgb(0 0 0 / 0.3);
+  box-shadow: 0 8px 16px -8px rgb(var(--accent) / 0.9);
+}
+
+@media (prefers-color-scheme: dark) {
+  .step-card__badge {
+    border-color: rgb(255 255 255 / 0.35);
+  }
+}
+
+/* The response to the pointer, on the card itself rather than on the fan slot —
+   so it works in the stacked layout too, where there is no `.fan-card`. */
+.step-card:hover,
+.step-card:focus-within {
+  border-color: rgb(var(--accent) / 0.7);
+  box-shadow:
+    0 30px 56px -30px rgb(var(--accent) / 0.8),
+    0 0 0 1px rgb(var(--accent) / 0.35);
+}
+
+.step-card:hover::before,
+.step-card:focus-within::before {
+  transform: scaleX(1);
 }
 
 /* Dim and desaturate the others — but do not blur them. See the note above. */

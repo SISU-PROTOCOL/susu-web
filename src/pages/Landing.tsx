@@ -347,10 +347,30 @@ function fanPlacement(index: number, count: number) {
   };
 }
 
+/** The accent hues, as bare RGB triplets so `index.css` can build opaque and
+ * translucent variants from one value — `rgb(var(--accent))` and
+ * `rgb(var(--accent) / 0.16)`. */
+const STEP_ACCENTS = [
+  '245 158 11', // amber
+  '16 185 129', // emerald
+  '14 165 233', // sky
+  '139 92 246', // violet
+  '244 63 94', // rose
+] as const;
+
+const CLAIM_ACCENTS = {
+  amber: '251 191 36',
+  emerald: '52 211 153',
+  sky: '56 189 248',
+  neutral: '163 163 163',
+} as const;
+
 /** One card face.
  *
- * The number is a `Sticker`, so it straightens when the card is hovered or holds
- * focus — the same gesture as picking the card up.
+ * The number appears twice on purpose, at two different weights: a crisp badge
+ * that straightens when the card is hovered or holds focus — the gesture of
+ * picking it up — and a large watermark numeral that gives the card its colour
+ * and weight without competing to be read.
  *
  * When `onToggle` is absent the card is inert: no button, so nothing is announced
  * as interactive and nothing is reachable by keyboard that does nothing. That is
@@ -367,38 +387,50 @@ function StepCard({
   active?: boolean;
   onToggle?: () => void;
 }) {
-  const heading = <h3 className="font-medium tracking-tight">{step.title}</h3>;
+  const heading = <h3 className="text-[1.0625rem] font-semibold tracking-tight">{step.title}</h3>;
 
   return (
-    <div className="flex min-h-60 flex-col rounded-xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
-      <div className="flex items-start gap-3">
-        <Sticker
-          tilt={index % 2 === 0 ? -7 : 6}
-          className="mt-0.5 size-7 shrink-0 border-2 border-neutral-900 bg-amber-100 text-xs font-semibold text-neutral-900 dark:border-neutral-100 dark:bg-amber-200"
-        >
-          {index + 1}
-        </Sticker>
+    <div
+      className="step-card"
+      style={{ '--accent': STEP_ACCENTS[index % STEP_ACCENTS.length] } as CSSProperties}
+    >
+      {/* Decorative, and `aria-hidden`: the badge below carries the same number
+          in a form that can actually be read. */}
+      <span aria-hidden="true" className="step-card__numeral">
+        {index + 1}
+      </span>
 
-        {onToggle ? (
-          // The heading is the control. `aria-pressed` is the honest description:
-          // this does not disclose content that was hidden, it picks one card out
-          // of the arc, which is a toggle.
-          <button
-            type="button"
-            aria-pressed={active === true}
-            onClick={onToggle}
-            className="cursor-pointer text-left"
+      {/* Above the watermark, which is what keeps the numeral behind the text. */}
+      <div className="relative z-10 flex flex-1 flex-col">
+        <div className="flex items-start gap-3">
+          <Sticker
+            tilt={index % 2 === 0 ? -7 : 6}
+            className="step-card__badge mt-0.5 size-8 shrink-0 border-2 text-sm font-bold"
           >
-            {heading}
-          </button>
-        ) : (
-          heading
-        )}
-      </div>
+            {index + 1}
+          </Sticker>
 
-      <p className="mt-3 text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
-        {step.body}
-      </p>
+          {onToggle ? (
+            // The heading is the control. `aria-pressed` is the honest
+            // description: this does not disclose content that was hidden, it
+            // picks one card out of the arc, which is a toggle.
+            <button
+              type="button"
+              aria-pressed={active === true}
+              onClick={onToggle}
+              className="cursor-pointer text-left"
+            >
+              {heading}
+            </button>
+          ) : (
+            heading
+          )}
+        </div>
+
+        <p className="mt-3 text-sm leading-relaxed text-neutral-700 dark:text-neutral-300">
+          {step.body}
+        </p>
+      </div>
     </div>
   );
 }
@@ -414,7 +446,7 @@ function Claim({
   title: string;
   delay: number;
   tilt: number;
-  accent: string;
+  accent: keyof typeof CLAIM_ACCENTS;
   children: ReactNode;
 }) {
   // `Reveal` is the `dl > div` wrapper, and it has to be — a `dt`/`dd` pair
@@ -426,7 +458,7 @@ function Claim({
     <Reveal
       delay={delay}
       className="settle settles flex flex-col rounded-xl border border-neutral-200 p-5 dark:border-neutral-800"
-      style={{ '--tilt': `${tilt}deg`, '--accent': ACCENTS[accent] } as CSSProperties}
+      style={{ '--tilt': `${tilt}deg`, '--accent': CLAIM_ACCENTS[accent] } as CSSProperties}
     >
       <dt className="font-medium tracking-tight">{title}</dt>
       <dd className="mt-1 text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
@@ -435,14 +467,6 @@ function Claim({
     </Reveal>
   );
 }
-
-/** The accent rule's colour, resolved to a value `index.css` can use directly. */
-const ACCENTS: Record<string, string> = {
-  amber: '#fbbf24',
-  emerald: '#34d399',
-  sky: '#38bdf8',
-  neutral: '#a3a3a3',
-};
 
 /**
  * The five steps, as content.
