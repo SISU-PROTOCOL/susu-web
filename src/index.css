@@ -177,10 +177,19 @@ body {
 
 /* The fan: cards arranged on an arc, pivotting at their bottom edge. */
 .fan {
+  /* The card's height and the headroom its focus state needs, declared together
+     because the empty space above the arc is exactly the difference between
+     them. Setting them as a pair is what keeps a taller card from leaving a
+     bigger gap under the heading — previously the container height and the
+     card height were decided in two different files, so the two drifted and
+     the gap grew to whatever was left over. */
+  --fan-card-height: 22rem;
+  --fan-lift: 5rem;
   position: relative;
   display: flex;
   align-items: flex-end;
   justify-content: center;
+  height: calc(var(--fan-card-height) + var(--fan-lift));
   list-style: none;
   padding: 0;
 }
@@ -213,15 +222,19 @@ body {
 .fan-card:hover,
 .fan-card[data-active='true'] {
   z-index: 100;
-  transform: rotate(0deg) translateX(0) translateY(-20px) scale(1.08);
+  transform: rotate(0deg) translateX(0) translateY(-30px) scale(1.1);
 }
 
 /* A picked card sits a little higher still. The extra lift uses the individual
    `translate` property, which composes with `transform` instead of competing
    with it — so this adds to the shared focus transform above rather than
-   silently replacing it. */
+   silently replacing it.
+ *
+ * The combined rise is the `scale` growth (10% of the card height, measured
+ * from the bottom pivot) plus the two translates, and it has to stay under
+ * `--fan-lift` or the focused card collides with the heading. */
 .fan-card[data-active='true'] {
-  translate: 0 -12px;
+  translate: 0 -10px;
 }
 
 /* Everything that is not the focus recedes — dimmed and desaturated, but never
@@ -245,7 +258,9 @@ body {
   isolation: isolate;
   overflow: hidden;
   display: flex;
-  height: 100%;
+  /* The height comes from the fan, which is the element that also has to leave
+     room for the lift — see `.fan`. */
+  min-height: var(--fan-card-height, 22rem);
   flex-direction: column;
   border-radius: 1.25rem;
   border: 1px solid rgb(var(--accent) / 0.3);
@@ -354,6 +369,13 @@ body {
     translate: none !important;
     z-index: auto;
     width: 100% !important;
+  }
+
+  /* Stacked, each card is its own row rather than a slice of one arc, so it
+     should take the height its text needs and no more — five cards at the arc's
+     height would be an unreasonable amount of scrolling. */
+  .step-card {
+    min-height: 0;
   }
 
   /* Nothing overlaps here, so nothing should recede either — including the

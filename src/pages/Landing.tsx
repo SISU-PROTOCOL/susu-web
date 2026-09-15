@@ -283,7 +283,7 @@ function Steps() {
 
   return (
     <ol
-      className="fan mt-8 h-108 max-[900px]:mt-6"
+      className="fan mt-2 max-[900px]:mt-3"
       data-has-active={active !== null}
       // Clicking the space between the cards releases the focused one, so the arc
       // can always be returned to its resting shape.
